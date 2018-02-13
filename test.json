@@ -1,0 +1,32 @@
+{
+                "type": "decoder",
+                "name": "authN",
+                "config": {
+                  "destinations": [
+                    {
+                      "name": "httpbininsec",
+                      "port": {
+                        "Port": {
+                          "Number": 8000
+                        }
+                      }
+                    }
+                  ],
+                  "peers": [
+                    {
+                      "Params": {
+                        "Mtls": null
+                      }
+                    }
+                  ],
+                  "end_users": [
+                    {
+                      "Params": {
+                        "Jwt": {
+                          "issuer": "testing.istio.io"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
