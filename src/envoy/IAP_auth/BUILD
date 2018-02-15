@@ -23,7 +23,6 @@ load(
     "envoy_cc_library",
     "envoy_cc_test",
 )
-
 load(
     "@envoy_api//bazel:api_build_system.bzl",
     "api_proto_library",
@@ -32,8 +31,15 @@ load(
 api_proto_library(
     name = "IAP_config_proto",
     srcs = [":config.proto"],
-    visibility = ["//visibility:public"],
     require_py = 0,
+    visibility = ["//visibility:public"],
+)
+
+api_proto_library(
+    name = "IAP_policy_proto",
+    srcs = [":policy.proto"],
+    require_py = 0,
+    visibility = ["//visibility:public"],
 )
 
 envoy_cc_library(
@@ -62,6 +68,7 @@ envoy_cc_library(
     deps = [
         ":IAP_config_proto_cc",
         ":IAP_jwt_lib",
+        ":IAP_policy_proto_cc",
         "@envoy//source/exe:envoy_common_lib",
     ],
 )

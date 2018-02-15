@@ -60,3 +60,9 @@ git_repository(
     commit = "563b674a2ce6650d459732932ea2bc98c9c9a9bf",  # Nov 28, 2017 (bazel 0.8.0 support)
     remote = "https://github.com/pubref/rules_protobuf",
 )
+
+git_repository(
+    name = "com_github_istio_api",
+    commit = "145be4868f169e496d90e258b45b34a1755dabe1",  # Feb. 13, 2018
+    remote = "https://github.com/istio/api.git",
+)
