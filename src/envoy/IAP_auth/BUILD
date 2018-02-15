@@ -98,6 +98,16 @@ envoy_cc_library(
     ],
 )
 
+envoy_cc_library(
+    name = "IAP_http_authn_filter_factory",
+    srcs = ["http_authn_filter_factory.cc"],
+    repository = "@envoy",
+    deps = [
+        ":IAP_http_filter_lib",
+        "@envoy//source/exe:envoy_common_lib",
+    ],
+)
+
 envoy_cc_test(
     name = "IAP_http_filter_integration_test",
     srcs = [":integration_test/http_filter_integration_test.cc"],
@@ -106,6 +116,7 @@ envoy_cc_test(
     ],
     repository = "@envoy",
     deps = [
+        ":IAP_http_authn_filter_factory",
         ":IAP_http_filter_factory",
         ":IAP_jwt_lib",
         "@envoy//test/integration:http_integration_lib",
