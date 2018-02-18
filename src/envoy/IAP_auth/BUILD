@@ -89,6 +89,22 @@ envoy_cc_library(
 )
 
 envoy_cc_library(
+    name = "IAP_authn_http_filter_lib",
+    srcs = [
+        "authentication_http_filter.cc",
+    ],
+    hdrs = [
+        "authentication_http_filter.h",
+        "authentication_store.h",
+    ],
+    repository = "@envoy",
+    deps = [
+        ":IAP_jwt_authenticator_lib",
+        "@envoy//source/exe:envoy_common_lib",
+    ],
+)
+
+envoy_cc_library(
     name = "IAP_http_filter_factory",
     srcs = ["http_filter_factory.cc"],
     repository = "@envoy",
@@ -99,11 +115,14 @@ envoy_cc_library(
 )
 
 envoy_cc_library(
-    name = "IAP_http_authn_filter_factory",
-    srcs = ["http_authn_filter_factory.cc"],
+    name = "IAP_authn_http_filter_factory",
+    srcs = ["authn_http_filter_factory.cc"],
+    hdrs = [
+        "authentication_http_filter.h",
+    ],
     repository = "@envoy",
     deps = [
-        ":IAP_http_filter_lib",
+        ":IAP_authn_http_filter_lib",
         "@envoy//source/exe:envoy_common_lib",
     ],
 )

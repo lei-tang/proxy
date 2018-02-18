@@ -25,6 +25,7 @@ envoy_cc_binary(
     repository = "@envoy",
     visibility = ["//visibility:public"],
     deps = [
+        "//src/envoy/IAP_auth:IAP_authn_http_filter_factory",
         "//src/envoy/IAP_auth:IAP_http_filter_factory",
         "//src/envoy/mixer:filter_lib",
         "@envoy//source/exe:envoy_main_entry_lib",

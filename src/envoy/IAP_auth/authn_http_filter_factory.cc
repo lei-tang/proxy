@@ -13,10 +13,10 @@
  * limitations under the License.
  */
 
-#include "src/envoy/IAP_auth/http_filter.h"
 #include "envoy/registry/registry.h"
 #include "google/protobuf/util/json_util.h"
-#include "src/envoy/IAP_auth/auth_store.h"
+#include "src/envoy/IAP_auth/authentication_http_filter.h"
+#include "src/envoy/IAP_auth/authentication_store.h"
 #include "src/envoy/IAP_auth/policy.pb.validate.h"
 
 namespace Envoy {
@@ -44,31 +44,33 @@ class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory {
   }
 
   ProtobufTypes::MessagePtr createEmptyConfigProto() override {
-    return ProtobufTypes::MessagePtr{new istio::authentication::v1alpha1::Policy};
+    return ProtobufTypes::MessagePtr{
+        new istio::authentication::v1alpha1::Policy};
   }
 
-  std::string name() override { return "authn-policy"; }
+  std::string name() override { return "authN"; }
 
  private:
   HttpFilterFactoryCb createFilter(
-     const istio::authentication::v1alpha1::Policy& proto_config,
+      const istio::authentication::v1alpha1::Policy& proto_config,
       FactoryContext& context) {
-      if(proto_config.peers_size()==0) {
-          return nullptr;
-      }
-      if(context.healthCheckFailed()) {
-          return nullptr;
-      }
-/*    auto store_factory = std::make_shared<istio::authentication::v1alpha1::Policy>(
-        proto_config, context);
+    if (proto_config.peers_size() == 0) {
+      return nullptr;
+    }
+    if (context.healthCheckFailed()) {
+      return nullptr;
+    }
+    auto store_factory =
+        std::make_shared<Http::Auth::AuthenticationStoreFactory>(proto_config,
+                                                                 context);
     Upstream::ClusterManager& cm = context.clusterManager();
     return [&cm, store_factory](
                Http::FilterChainFactoryCallbacks& callbacks) -> void {
       callbacks.addStreamDecoderFilter(
-          std::make_shared<Http::JwtVerificationFilter>(
-              cm, store_factory->store()));
-    };*/
-      return nullptr;
+          std::make_shared<Http::AuthenticationFilter>(cm,
+                                                       store_factory->store()));
+    };
+    return nullptr;
   }
 };
 
