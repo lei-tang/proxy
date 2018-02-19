@@ -44,8 +44,12 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
 
   // Verify the JWT token, onDone() will be called when completed.
   // jwt_auth_.Verify(headers, this);
+  // Skip jwt validattion, simply say OK
+  onDone(Auth::Status::OK);
 
   if (state_ == Complete) {
+    ENVOY_LOG(debug, "Called AuthenticationFilter : {}, return FilterHeadersStatus::Continue;",
+              __func__);
     return FilterHeadersStatus::Continue;
   }
   ENVOY_LOG(debug, "Called AuthenticationFilter : {} Stop", __func__);
@@ -72,6 +76,8 @@ void AuthenticationFilter::onDone(const Auth::Status& status) {
 
   state_ = Complete;
   if (stopped_) {
+    ENVOY_LOG(debug, "Called AuthenticationFilter : {} call decoder_callbacks_->continueDecoding();",
+              __FUNCTION__);
     decoder_callbacks_->continueDecoding();
   }
 }
@@ -79,8 +85,12 @@ void AuthenticationFilter::onDone(const Auth::Status& status) {
 FilterDataStatus AuthenticationFilter::decodeData(Buffer::Instance&, bool) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
   if (state_ == Calling) {
+    ENVOY_LOG(debug, "Called AuthenticationFilter : {} return FilterDataStatus::StopIterationAndBuffer;",
+                        __FUNCTION__);
     return FilterDataStatus::StopIterationAndBuffer;
   }
+  ENVOY_LOG(debug, "Called AuthenticationFilter : {} FilterDataStatus::Continue;",
+            __FUNCTION__);
   return FilterDataStatus::Continue;
 }
 

@@ -15,28 +15,35 @@
 
 #include "envoy/registry/registry.h"
 #include "google/protobuf/util/json_util.h"
-#include "src/envoy/IAP_auth/authentication_http_filter.h"
 #include "src/envoy/IAP_auth/authentication_store.h"
+#include "src/envoy/IAP_auth/authentication_http_filter.h"
 #include "src/envoy/IAP_auth/policy.pb.validate.h"
 
 namespace Envoy {
 namespace Server {
 namespace Configuration {
 
-class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory {
+class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory,
+                                      public Logger::Loggable<Logger::Id::http> {
  public:
   HttpFilterFactoryCb createFilterFactory(const Json::Object& config,
                                           const std::string&,
                                           FactoryContext& context) override {
     istio::authentication::v1alpha1::Policy proto_config;
 
+    ENVOY_LOG(debug, "Called AuthnVerificationFilterConfig : {}", __func__);
+
     MessageUtil::loadFromJson(config.asJsonString(), proto_config);
+    ENVOY_LOG(debug, "Called AuthnVerificationFilterConfig : loadFromJson()");
+
     return createFilter(proto_config, context);
   }
 
   HttpFilterFactoryCb createFilterFactoryFromProto(
       const Protobuf::Message& proto_config, const std::string&,
       FactoryContext& context) override {
+
+    ENVOY_LOG(debug, "Called AuthnVerificationFilterConfig : {}", __func__);
     return createFilter(
         MessageUtil::downcastAndValidate<
             const istio::authentication::v1alpha1::Policy&>(proto_config),
@@ -44,6 +51,7 @@ class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory {
   }
 
   ProtobufTypes::MessagePtr createEmptyConfigProto() override {
+    ENVOY_LOG(debug, "Called AuthnVerificationFilterConfig : {}", __func__);
     return ProtobufTypes::MessagePtr{
         new istio::authentication::v1alpha1::Policy};
   }
@@ -54,6 +62,7 @@ class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory {
   HttpFilterFactoryCb createFilter(
       const istio::authentication::v1alpha1::Policy& proto_config,
       FactoryContext& context) {
+    ENVOY_LOG(debug, "Called AuthnVerificationFilterConfig : {}", __func__);
     if (proto_config.peers_size() == 0) {
       return nullptr;
     }
@@ -70,7 +79,6 @@ class AuthnVerificationFilterConfig : public NamedHttpFilterConfigFactory {
           std::make_shared<Http::AuthenticationFilter>(cm,
                                                        store_factory->store()));
     };
-    return nullptr;
   }
 };
 
