@@ -20,6 +20,7 @@
 #include "common/http/utility.h"
 #include "envoy/http/async_client.h"
 #include "server/config/network/http_connection_manager.h"
+#include "src/envoy/IAP_auth/policy.pb.validate.h"
 
 #include <chrono>
 #include <string>
@@ -27,8 +28,9 @@
 namespace Envoy {
 namespace Http {
 
-AuthenticationFilter::AuthenticationFilter(Upstream::ClusterManager&,
-                                           Auth::AuthenticationStore&) {}
+AuthenticationFilter::AuthenticationFilter(Upstream::ClusterManager& cm,
+                                           Auth::AuthenticationStore& store)
+        :cm_(cm),store_(store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -41,6 +43,21 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
   state_ = Calling;
   stopped_ = false;
+
+  const ::istio::authentication::v1alpha1::Policy& config= store_.config();
+  int peer_size = config.peers().size();
+  ENVOY_LOG(debug, "AuthenticationFilter: {} config.peers().size()={}",
+            __func__, peer_size);
+  for(int i=0; i<peer_size; i++) {
+    const ::istio::authentication::v1alpha1::Mechanism &m= config.peers()[i];
+    if(m.has_mtls()) {
+      ENVOY_LOG(debug, "AuthenticationFilter: {} this connection requires mTLS",
+                __func__);
+    }else {
+      ENVOY_LOG(debug, "AuthenticationFilter: {} this connection does not require mTLS",
+                __func__);
+    }
+  }
 
   // Verify the JWT token, onDone() will be called when completed.
   // jwt_auth_.Verify(headers, this);

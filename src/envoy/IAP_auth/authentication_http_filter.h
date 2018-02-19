@@ -52,6 +52,8 @@ class AuthenticationFilter : public StreamDecoderFilter,
   StreamDecoderFilterCallbacks* decoder_callbacks_;
   // The auth object.
   // Auth::JwtAuthenticator jwt_auth_;
+  Upstream::ClusterManager& cm_;
+  Auth::AuthenticationStore& store_;
 
   // The state of the request
   enum State { Init, Calling, Responded, Complete };
