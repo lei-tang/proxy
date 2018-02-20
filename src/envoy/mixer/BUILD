@@ -42,7 +42,6 @@ envoy_cc_library(
     deps = [
         "//src/control/http:control_lib",
         "//src/control/tcp:control_lib",
-        "//src/envoy/auth:http_filter_lib",
         "//src/envoy/IAP_auth:IAP_http_filter_lib",
         "@envoy//source/exe:envoy_common_lib",
     ],
