@@ -18,15 +18,18 @@
 #include "authentication/v1alpha1/policy.pb.h"
 #include "common/common/logger.h"
 #include "server/config/network/http_connection_manager.h"
+#include "src/envoy/http/jwt_auth/jwt_authenticator.h"
 
 namespace Envoy {
 namespace Http {
 
 // The authentication filter.
 class AuthenticationFilter : public StreamDecoderFilter,
-                             public Logger::Loggable<Logger::Id::filter> {
+                             public JwtAuth::JwtAuthenticator::Callbacks,
+                             public Logger::Loggable<Logger::Id::http> {
  public:
-  AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config);
+  AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config,
+                       Upstream::ClusterManager& cm);
   ~AuthenticationFilter();
 
   // Http::StreamFilterBase
@@ -40,9 +43,15 @@ class AuthenticationFilter : public StreamDecoderFilter,
       StreamDecoderFilterCallbacks& callbacks) override;
 
  private:
+  // Implement the onDone() function of JwtAuth::Authenticator::Callbacks
+  // interface.
+  void onDone(const JwtAuth::Status& status);
+
   // Store the config.
   const istio::authentication::v1alpha1::Policy& config_;
   StreamDecoderFilterCallbacks* decoder_callbacks_;
+  // The JWT authenticator object.
+  JwtAuth::JwtAuthenticator jwt_authn_;
 };
 
 }  // namespace Http

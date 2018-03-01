@@ -15,14 +15,19 @@
 
 #include "src/envoy/http/authn/http_filter.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
+#include "src/envoy/http/jwt_auth/config.pb.h"
 #include "src/envoy/utils/utils.h"
 
 namespace Envoy {
 namespace Http {
 
+JwtAuth::Config::AuthFilterConfig config;
+JwtAuth::JwtAuthStore store(config);
+
 AuthenticationFilter::AuthenticationFilter(
-    const istio::authentication::v1alpha1::Policy& config)
-    : config_(config) {}
+    const istio::authentication::v1alpha1::Policy& config,
+    Upstream::ClusterManager& cm)
+    : config_(config), jwt_authn_(cm, store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -102,6 +107,29 @@ void AuthenticationFilter::setDecoderFilterCallbacks(
     StreamDecoderFilterCallbacks& callbacks) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
   decoder_callbacks_ = &callbacks;
+}
+
+void AuthenticationFilter::onDone(const JwtAuth::Status& status) {
+  ENVOY_LOG(debug, "Called AuthenticationFilter: check complete {}",
+            int(status));
+  // This stream has been reset, abort the callback.
+  /*  if (state_ == Responded) {
+      return;
+    }
+    if (status != JwtAuth::Status::OK) {
+      state_ = Responded;
+      // verification failed
+      Code code = Code(401);  // Unauthorized
+      // return failure reason as message body
+      Utility::sendLocalReply(*decoder_callbacks_, false, code,
+                              JwtAuth::StatusToString(status));
+      return;
+    }
+
+    state_ = Complete;
+    if (stopped_) {
+      decoder_callbacks_->continueDecoding();
+    }*/
 }
 
 }  // namespace Http
