@@ -26,6 +26,19 @@ namespace Configuration {
 namespace {
 // The name for the Istio authentication filter.
 const std::string kAuthnFactoryName("istio_authn");
+
+std::string jwt_auth_json_config = R"(
+{
+  "jwts": [
+    {
+       "issuer": "628645741881-noabiu23f5a8m8ovd8ucv698lj78vv0l@developer.gserviceaccount.com",
+       "jwks_uri": "http://localhost:8081/",
+       "jwks_uri_envoy_cluster": "example_issuer"
+    }
+  ]
+}
+)";
+
 }  // namespace
 
 class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
@@ -76,11 +89,29 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
  private:
   HttpFilterFactoryCb createFilter(FactoryContext& context) {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
+    Http::JwtAuth::Config::AuthFilterConfig proto_config;
+
+    // Convert istio-authn jwt to jwt_auth jwt in protobuf format.
+    // After the conversion, use jwt_auth to authenticate the jwt.
+    //   Envoy::Server::Configuration::NamedHttpFilterConfigFactory&
+    //   auth_factory =
+    //       Config::Utility::getAndCheckFactory<
+    //           Envoy::Server::Configuration::NamedHttpFilterConfigFactory>(
+    //           std::string("jwt-auth"));
+    //   ProtobufTypes::MessagePtr proto =
+    //   auth_factory.createEmptyConfigProto();
+    //   Http::JwtAuth::Config::AuthFilterConfig proto_config;
+    MessageUtil::loadFromJson(jwt_auth_json_config, proto_config);
+    std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory =
+        std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
+                                                             context);
 
     Upstream::ClusterManager& cm = context.clusterManager();
-    return [&](Http::FilterChainFactoryCallbacks& callbacks) -> void {
+    return [&, jwt_store_factory](
+               Http::FilterChainFactoryCallbacks& callbacks) -> void {
       callbacks.addStreamDecoderFilter(
-          std::make_shared<Http::AuthenticationFilter>(policy_, cm));
+          std::make_shared<Http::AuthenticationFilter>(
+              policy_, cm, jwt_store_factory->store()));
     };
   }
 

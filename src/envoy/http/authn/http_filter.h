@@ -29,7 +29,8 @@ class AuthenticationFilter : public StreamDecoderFilter,
                              public Logger::Loggable<Logger::Id::http> {
  public:
   AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config,
-                       Upstream::ClusterManager& cm);
+                       Upstream::ClusterManager& cm,
+                       JwtAuth::JwtAuthStore& store);
   ~AuthenticationFilter();
 
   // Http::StreamFilterBase
@@ -54,12 +55,14 @@ class AuthenticationFilter : public StreamDecoderFilter,
   // The pointer to the http decoder call back.
   StreamDecoderFilterCallbacks* decoder_callbacks_;
 
-  // jwt_auth config proto
-  JwtAuth::Config::AuthFilterConfig jwt_config_;
-  // jwt_auth per thread store
-  JwtAuth::JwtAuthStore jwt_store_;
   // The JWT authenticator object.
   JwtAuth::JwtAuthenticator jwt_auth_;
+
+  // The state of the request
+  enum State { Init, Calling, Responded, Complete };
+  State state_ = Init;
+  // Mark if request has been stopped.
+  bool stopped_ = false;
 };
 
 }  // namespace Http
