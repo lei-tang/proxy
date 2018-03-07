@@ -14,6 +14,8 @@
  */
 
 #include "src/envoy/http/authn/http_filter.h"
+#include "common/config/utility.h"
+#include "envoy/server/filter_config.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
 #include "src/envoy/http/jwt_auth/config.pb.h"
 #include "src/envoy/utils/utils.h"
@@ -21,13 +23,26 @@
 namespace Envoy {
 namespace Http {
 
+std::string jwt_auth_json_config = R"(
+  "config": {
+     "jwts": [
+       {
+          "issuer": "628645741881-noabiu23f5a8m8ovd8ucv698lj78vv0l@developer.gserviceaccount.com",
+          "jwks_uri": "http://localhost:8081/",
+          "jwks_uri_envoy_cluster": "example_issuer"
+       }
+     ]
+  }
+)";
+
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
     Upstream::ClusterManager& cm)
     : config_(config),
+      cm_(cm),
       jwt_config_(),
       jwt_store_(jwt_config_),
-      jwt_authn_(cm, jwt_store_) {}
+      jwt_auth_(cm, jwt_store_) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -35,7 +50,8 @@ void AuthenticationFilter::onDestroy() {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
 }
 
-FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
+FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
+                                                        bool) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
 
   int peer_size = config_.peers_size();
@@ -94,6 +110,29 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
       ENVOY_LOG(debug,
                 "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
                 __func__, jwt.issuer(), jwt.jwks_uri());
+      // Convert istio-authn jwt to jwt_auth jwt in protobuf format.
+      // After the conversion, use jwt_auth to authenticate the jwt.
+      Envoy::Server::Configuration::NamedHttpFilterConfigFactory& auth_factory =
+          Config::Utility::getAndCheckFactory<
+              Envoy::Server::Configuration::NamedHttpFilterConfigFactory>(
+              std::string("jwt-auth"));
+      ProtobufTypes::MessagePtr proto = auth_factory.createEmptyConfigProto();
+      Http::JwtAuth::Config::AuthFilterConfig proto_config;
+      // Todo: properly init proto_config using AuthFilterConfig proto or json
+      // conf
+      //(May need to dump the json conf of jwt-auth)
+      // MessageUtil::loadFromFile("./envoy.conf", proto_config);
+      // MessageUtil::loadFromJson(jwt_auth_json_config, proto_config);
+      JwtAuth::JwtAuthStore jwt_store(proto_config);
+      JwtAuth::JwtAuthenticator jwt_auth(cm_, jwt_store);
+      // auto store_factory =
+      // std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(
+      //        proto_config, context);
+      // Verify the JWT token, onDone() will be called when completed.
+      // jwt_auth.Verify(headers, this);
+
+      // Verify the JWT token, onDone() will be called when completed.
+      jwt_auth_.Verify(headers, this);
     }
   }
 

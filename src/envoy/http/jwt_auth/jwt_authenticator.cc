@@ -101,6 +101,8 @@ void JwtAuthenticator::Verify(HeaderMap& headers,
   // Check the issuer is configured or not.
   auto issuer = store_.pubkey_cache().LookupByIssuer(jwt_->Iss());
   if (!issuer) {
+    ENVOY_LOG(debug, "store_.pubkey_cache().LookupByIssuer({}) returns NULL",
+              jwt_->Iss());
     DoneWithStatus(Status::JWT_UNKNOWN_ISSUER);
     return;
   }
