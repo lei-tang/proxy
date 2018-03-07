@@ -49,7 +49,13 @@ class AuthenticationFilter : public StreamDecoderFilter,
 
   // Store the config.
   const istio::authentication::v1alpha1::Policy& config_;
+  // The pointer to the http decoder call back.
   StreamDecoderFilterCallbacks* decoder_callbacks_;
+
+  // jwt_auth config proto
+  JwtAuth::Config::AuthFilterConfig jwt_config_;
+  // jwt_auth per thread store
+  JwtAuth::JwtAuthStore jwt_store_;
   // The JWT authenticator object.
   JwtAuth::JwtAuthenticator jwt_authn_;
 };

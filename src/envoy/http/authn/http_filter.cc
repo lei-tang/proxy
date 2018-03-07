@@ -21,13 +21,13 @@
 namespace Envoy {
 namespace Http {
 
-JwtAuth::Config::AuthFilterConfig config;
-JwtAuth::JwtAuthStore store(config);
-
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
     Upstream::ClusterManager& cm)
-    : config_(config), jwt_authn_(cm, store) {}
+    : config_(config),
+      jwt_config_(),
+      jwt_store_(jwt_config_),
+      jwt_authn_(cm, jwt_store_) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -80,6 +80,20 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
           debug,
           "AuthenticationFilter: {} this connection does not require mTLS",
           __func__);
+    }
+  }
+
+  int endusers_size = config_.end_users_size();
+  ENVOY_LOG(debug, "AuthenticationFilter: {} config.endusers_size()={}",
+            __func__, endusers_size);
+  if (endusers_size > 0) {
+    const ::istio::authentication::v1alpha1::Mechanism& m =
+        config_.end_users()[0];
+    if (m.has_jwt()) {
+      const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
+      ENVOY_LOG(debug,
+                "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
+                __func__, jwt.issuer(), jwt.jwks_uri());
     }
   }
 
