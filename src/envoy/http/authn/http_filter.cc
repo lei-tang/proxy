@@ -81,12 +81,17 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
     }
   }
 
-  int endusers_size = config_.end_users_size();
-  ENVOY_LOG(debug, "AuthenticationFilter: {} config.endusers_size()={}",
-            __func__, endusers_size);
-  if (endusers_size > 0) {
-    const ::istio::authentication::v1alpha1::Mechanism& m =
-        config_.end_users()[0];
+  int origins_size = 0;
+  // In POC, only inspect the first credential_rule
+  if (config_.credential_rules_size() > 0 &&
+      config_.credential_rules()[0].origins_size() > 0) {
+    origins_size = config_.credential_rules()[0].origins_size();
+  }
+  ENVOY_LOG(debug, "AuthenticationFilter: {} config.origins_size()={}",
+            __func__, origins_size);
+  if (origins_size > 0) {
+    const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
+        config_.credential_rules()[0].origins()[0];
     if (m.has_jwt()) {
       const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
       ENVOY_LOG(debug,

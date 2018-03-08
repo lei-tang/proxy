@@ -84,15 +84,25 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
   void convertJwtAuthFormat(
       istio::authentication::v1alpha1::Policy& policy,
       Http::JwtAuth::Config::AuthFilterConfig* proto_config) {
-    if (policy.end_users_size() > 0 && policy.end_users(0).has_jwt()) {
-      // In POC, only the following fields are converted.
-      // Todo: may need to convert more fields if necessary
-      Http::JwtAuth::Config::JWT jwt;
-      jwt.set_issuer(policy_.end_users(0).jwt().issuer());
-      jwt.set_jwks_uri(policy_.end_users(0).jwt().jwks_uri());
-      jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
-      auto jwts = proto_config->add_jwts();
-      jwts->CopyFrom(jwt);
+    int origins_size = 0;
+    // In POC, only inspect the first credential_rule
+    if (policy.credential_rules_size() > 0 &&
+        policy.credential_rules()[0].origins_size() > 0) {
+      origins_size = policy.credential_rules()[0].origins_size();
+    }
+    if (origins_size > 0) {
+      const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
+          policy.credential_rules()[0].origins()[0];
+      if (m.has_jwt()) {
+        // In POC, only the following fields are converted.
+        // Todo: may need to convert more fields if necessary
+        Http::JwtAuth::Config::JWT jwt;
+        jwt.set_issuer(m.jwt().issuer());
+        jwt.set_jwks_uri(m.jwt().jwks_uri());
+        jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
+        auto jwts = proto_config->add_jwts();
+        jwts->CopyFrom(jwt);
+      }
     }
   }
 
