@@ -26,6 +26,12 @@ namespace Configuration {
 namespace {
 // The name for the Istio authentication filter.
 const std::string kAuthnFactoryName("istio_authn");
+
+// The name for JWT cluster
+// Todo: need to add a cluster field in the Istio authn JWT config.
+// Before such field is added to the Istio authn JWT config,
+// it is temporarily hard-coded.
+const std::string kJwtClusterName("example_issuer");
 }  // namespace
 
 class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
@@ -33,14 +39,14 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
  public:
   HttpFilterFactoryCb createFilterFactory(const Json::Object& config,
                                           const std::string&,
-                                          FactoryContext&) override {
+                                          FactoryContext& context) override {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
 
     google::protobuf::util::Status status =
         Utils::ParseJsonMessage(config.asJsonString(), &policy_);
     ENVOY_LOG(debug, "Called AuthnFilterConfig : Utils::ParseJsonMessage()");
     if (status.ok()) {
-      return createFilter();
+      return createFilter(context);
     } else {
       ENVOY_LOG(critical, "Utils::ParseJsonMessage() return value is: " +
                               status.ToString());
@@ -53,7 +59,7 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
 
   HttpFilterFactoryCb createFilterFactoryFromProto(
       const Protobuf::Message& proto_config, const std::string&,
-      FactoryContext&) override {
+      FactoryContext& context) override {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
 
     const istio::authentication::v1alpha1::Policy& policy =
@@ -62,7 +68,7 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
 
     policy_ = policy;
 
-    return createFilter();
+    return createFilter(context);
   }
 
   ProtobufTypes::MessagePtr createEmptyConfigProto() override {
@@ -74,12 +80,32 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
   std::string name() override { return kAuthnFactoryName; }
 
  private:
-  HttpFilterFactoryCb createFilter() {
+  HttpFilterFactoryCb createFilter(FactoryContext& context) {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
+    Http::JwtAuth::Config::AuthFilterConfig proto_config;
 
-    return [&](Http::FilterChainFactoryCallbacks& callbacks) -> void {
+    if (policy_.end_users_size() > 0 && policy_.end_users(0).has_jwt()) {
+      // Convert istio-authn::jwt to jwt_auth::jwt in protobuf format.
+      // In POC, only the following fields are converted.
+      // Todo: may need to convert more fields if necessary
+      Http::JwtAuth::Config::JWT jwt;
+      jwt.set_issuer(policy_.end_users(0).jwt().issuer());
+      jwt.set_jwks_uri(policy_.end_users(0).jwt().jwks_uri());
+      jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
+      auto jwts = proto_config.add_jwts();
+      jwts->CopyFrom(jwt);
+    }
+
+    std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory =
+        std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
+                                                             context);
+    Upstream::ClusterManager& cm = context.clusterManager();
+
+    return [&, jwt_store_factory](
+               Http::FilterChainFactoryCallbacks& callbacks) -> void {
       callbacks.addStreamDecoderFilter(
-          std::make_shared<Http::AuthenticationFilter>(policy_));
+          std::make_shared<Http::AuthenticationFilter>(
+              policy_, cm, jwt_store_factory->store()));
     };
   }
 

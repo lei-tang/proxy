@@ -14,23 +14,26 @@
  */
 
 #include "src/envoy/http/authn/http_filter.h"
+#include "common/http/utility.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
-#include "src/envoy/utils/utils.h"
 
 namespace Envoy {
 namespace Http {
 
 AuthenticationFilter::AuthenticationFilter(
-    const istio::authentication::v1alpha1::Policy& config)
-    : config_(config) {}
+    const istio::authentication::v1alpha1::Policy& config,
+    Upstream::ClusterManager& cm, JwtAuth::JwtAuthStore& store)
+    : config_(config), jwt_auth_(cm, store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
 void AuthenticationFilter::onDestroy() {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
+  jwt_auth_.onDestroy();
 }
 
-FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
+FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
+                                                        bool) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
 
   int peer_size = config_.peers_size();
@@ -78,6 +81,30 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
     }
   }
 
+  int endusers_size = config_.end_users_size();
+  ENVOY_LOG(debug, "AuthenticationFilter: {} config.endusers_size()={}",
+            __func__, endusers_size);
+  if (endusers_size > 0) {
+    const ::istio::authentication::v1alpha1::Mechanism& m =
+        config_.end_users()[0];
+    if (m.has_jwt()) {
+      const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
+      ENVOY_LOG(debug,
+                "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
+                __func__, jwt.issuer(), jwt.jwks_uri());
+      state_ = Calling;
+      stopped_ = false;
+
+      // Verify the JWT token, onDone() will be called when completed.
+      jwt_auth_.Verify(headers, this);
+
+      if (state_ == Complete) {
+        return FilterHeadersStatus::Continue;
+      }
+      stopped_ = true;
+      return FilterHeadersStatus::StopIteration;
+    }
+  }
   ENVOY_LOG(
       debug,
       "Called AuthenticationFilter : {}, return FilterHeadersStatus::Continue;",
@@ -87,6 +114,13 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap&, bool) {
 
 FilterDataStatus AuthenticationFilter::decodeData(Buffer::Instance&, bool) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
+  if (state_ == Calling) {
+    ENVOY_LOG(debug,
+              "Called AuthenticationFilter : {} "
+              "FilterDataStatus::StopIterationAndBuffer;",
+              __FUNCTION__);
+    return FilterDataStatus::StopIterationAndBuffer;
+  }
   ENVOY_LOG(debug,
             "Called AuthenticationFilter : {} FilterDataStatus::Continue;",
             __FUNCTION__);
@@ -94,7 +128,10 @@ FilterDataStatus AuthenticationFilter::decodeData(Buffer::Instance&, bool) {
 }
 
 FilterTrailersStatus AuthenticationFilter::decodeTrailers(HeaderMap&) {
-  ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
+  ENVOY_LOG(debug, "Called AuthenticationFilter: {}", __func__);
+  if (state_ == Calling) {
+    return FilterTrailersStatus::StopIteration;
+  }
   return FilterTrailersStatus::Continue;
 }
 
@@ -102,6 +139,29 @@ void AuthenticationFilter::setDecoderFilterCallbacks(
     StreamDecoderFilterCallbacks& callbacks) {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
   decoder_callbacks_ = &callbacks;
+}
+
+void AuthenticationFilter::onDone(const JwtAuth::Status& status) {
+  ENVOY_LOG(debug, "Called AuthenticationFilter: check complete {}",
+            int(status));
+  // This stream has been reset, abort the callback.
+  if (state_ == Responded) {
+    return;
+  }
+  if (status != JwtAuth::Status::OK) {
+    state_ = Responded;
+    // JWT verification failed
+    Code code = Code(401);  // Unauthorized
+    // return failure reason as message body
+    Utility::sendLocalReply(*decoder_callbacks_, false, code,
+                            JwtAuth::StatusToString(status));
+    return;
+  }
+
+  state_ = Complete;
+  if (stopped_) {
+    decoder_callbacks_->continueDecoding();
+  }
 }
 
 }  // namespace Http
