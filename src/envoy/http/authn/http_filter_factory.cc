@@ -80,21 +80,27 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
   std::string name() override { return kAuthnFactoryName; }
 
  private:
-  HttpFilterFactoryCb createFilter(FactoryContext& context) {
-    ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
-    Http::JwtAuth::Config::AuthFilterConfig proto_config;
-
-    if (policy_.end_users_size() > 0 && policy_.end_users(0).has_jwt()) {
-      // Convert istio-authn::jwt to jwt_auth::jwt in protobuf format.
+  // Convert istio-authn::jwt to jwt_auth::jwt in protobuf format.
+  void convertJwtAuthFormat(
+      istio::authentication::v1alpha1::Policy& policy,
+      Http::JwtAuth::Config::AuthFilterConfig* proto_config) {
+    if (policy.end_users_size() > 0 && policy.end_users(0).has_jwt()) {
       // In POC, only the following fields are converted.
       // Todo: may need to convert more fields if necessary
       Http::JwtAuth::Config::JWT jwt;
       jwt.set_issuer(policy_.end_users(0).jwt().issuer());
       jwt.set_jwks_uri(policy_.end_users(0).jwt().jwks_uri());
       jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
-      auto jwts = proto_config.add_jwts();
+      auto jwts = proto_config->add_jwts();
       jwts->CopyFrom(jwt);
     }
+  }
+
+  HttpFilterFactoryCb createFilter(FactoryContext& context) {
+    ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
+    Http::JwtAuth::Config::AuthFilterConfig proto_config;
+
+    convertJwtAuthFormat(policy_, &proto_config);
 
     std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory =
         std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
