@@ -14,12 +14,8 @@
  */
 
 #include "src/envoy/http/authn/http_filter.h"
-#include "common/config/utility.h"
 #include "common/http/utility.h"
-#include "envoy/server/filter_config.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
-#include "src/envoy/http/jwt_auth/config.pb.h"
-#include "src/envoy/utils/utils.h"
 
 namespace Envoy {
 namespace Http {
@@ -27,7 +23,7 @@ namespace Http {
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
     Upstream::ClusterManager& cm, JwtAuth::JwtAuthStore& store)
-    : config_(config), cm_(cm), jwt_auth_(cm, store) {}
+    : config_(config), jwt_auth_(cm, store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -103,13 +99,8 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
       jwt_auth_.Verify(headers, this);
 
       if (state_ == Complete) {
-        ENVOY_LOG(debug,
-                  "Called AuthenticationFilter : {}, return "
-                  "FilterHeadersStatus::Continue;",
-                  __func__);
         return FilterHeadersStatus::Continue;
       }
-      ENVOY_LOG(debug, "Called AuthenticationFilter : {} Stop", __func__);
       stopped_ = true;
       return FilterHeadersStatus::StopIteration;
     }
@@ -159,7 +150,7 @@ void AuthenticationFilter::onDone(const JwtAuth::Status& status) {
   }
   if (status != JwtAuth::Status::OK) {
     state_ = Responded;
-    // verification failed
+    // JWT verification failed
     Code code = Code(401);  // Unauthorized
     // return failure reason as message body
     Utility::sendLocalReply(*decoder_callbacks_, false, code,

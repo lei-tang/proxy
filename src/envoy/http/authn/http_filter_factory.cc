@@ -27,18 +27,11 @@ namespace {
 // The name for the Istio authentication filter.
 const std::string kAuthnFactoryName("istio_authn");
 
-std::string jwt_auth_json_config = R"(
-{
-  "jwts": [
-    {
-       "issuer": "628645741881-noabiu23f5a8m8ovd8ucv698lj78vv0l@developer.gserviceaccount.com",
-       "jwks_uri": "http://localhost:8081/",
-       "jwks_uri_envoy_cluster": "example_issuer"
-    }
-  ]
-}
-)";
-
+// The name for JWT cluster
+// Todo: need to add a cluster field in the Istio authn JWT config.
+// Before such field is added to the Istio authn JWT config,
+// it is temporarily hard-coded.
+const std::string kJwtClusterName("example_issuer");
 }  // namespace
 
 class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
@@ -91,22 +84,23 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
     Http::JwtAuth::Config::AuthFilterConfig proto_config;
 
-    // Convert istio-authn jwt to jwt_auth jwt in protobuf format.
-    // After the conversion, use jwt_auth to authenticate the jwt.
-    //   Envoy::Server::Configuration::NamedHttpFilterConfigFactory&
-    //   auth_factory =
-    //       Config::Utility::getAndCheckFactory<
-    //           Envoy::Server::Configuration::NamedHttpFilterConfigFactory>(
-    //           std::string("jwt-auth"));
-    //   ProtobufTypes::MessagePtr proto =
-    //   auth_factory.createEmptyConfigProto();
-    //   Http::JwtAuth::Config::AuthFilterConfig proto_config;
-    MessageUtil::loadFromJson(jwt_auth_json_config, proto_config);
+    if (policy_.end_users_size() > 0 && policy_.end_users(0).has_jwt()) {
+      // Convert istio-authn::jwt to jwt_auth::jwt in protobuf format.
+      // In POC, only the following fields are converted.
+      // Todo: may need to convert more fields if necessary
+      Http::JwtAuth::Config::JWT jwt;
+      jwt.set_issuer(policy_.end_users(0).jwt().issuer());
+      jwt.set_jwks_uri(policy_.end_users(0).jwt().jwks_uri());
+      jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
+      auto jwts = proto_config.add_jwts();
+      jwts->CopyFrom(jwt);
+    }
+
     std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory =
         std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
                                                              context);
-
     Upstream::ClusterManager& cm = context.clusterManager();
+
     return [&, jwt_store_factory](
                Http::FilterChainFactoryCallbacks& callbacks) -> void {
       callbacks.addStreamDecoderFilter(

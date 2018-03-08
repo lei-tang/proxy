@@ -50,18 +50,16 @@ class AuthenticationFilter : public StreamDecoderFilter,
 
   // Store the config.
   const istio::authentication::v1alpha1::Policy& config_;
-  // The cluster manager object to make HTTP call.
-  Upstream::ClusterManager& cm_;
   // The pointer to the http decoder call back.
   StreamDecoderFilterCallbacks* decoder_callbacks_;
 
   // The JWT authenticator object.
   JwtAuth::JwtAuthenticator jwt_auth_;
 
-  // The state of the request
+  // The state of handling HTTP request
   enum State { Init, Calling, Responded, Complete };
   State state_ = Init;
-  // Mark if request has been stopped.
+  // Mark if HTTP request has been stopped.
   bool stopped_ = false;
 };
 

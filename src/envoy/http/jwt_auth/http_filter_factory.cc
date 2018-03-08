@@ -23,16 +23,12 @@ namespace Envoy {
 namespace Server {
 namespace Configuration {
 
-class JwtVerificationFilterConfig
-    : public NamedHttpFilterConfigFactory,
-      public Logger::Loggable<Logger::Id::filter> {
+class JwtVerificationFilterConfig : public NamedHttpFilterConfigFactory {
  public:
   HttpFilterFactoryCb createFilterFactory(const Json::Object& config,
                                           const std::string&,
                                           FactoryContext& context) override {
     Http::JwtAuth::Config::AuthFilterConfig proto_config;
-    ENVOY_LOG(debug, "Called JwtVerificationFilterConfig {}", __FUNCTION__);
-    ENVOY_LOG(debug, "config.asJsonString() is {}", config.asJsonString());
     MessageUtil::loadFromJson(config.asJsonString(), proto_config);
     return createFilter(proto_config, context);
   }
