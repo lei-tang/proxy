@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <memory>
 #include "authentication/v1alpha1/policy.pb.h"
 #include "common/common/logger.h"
 #include "server/config/network/http_connection_manager.h"
@@ -28,9 +29,11 @@ class AuthenticationFilter : public StreamDecoderFilter,
                              public JwtAuth::JwtAuthenticator::Callbacks,
                              public Logger::Loggable<Logger::Id::http> {
  public:
-  AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config,
-                       Upstream::ClusterManager& cm,
-                       JwtAuth::JwtAuthStore& store);
+  AuthenticationFilter(
+      const istio::authentication::v1alpha1::Policy& config,
+      Upstream::ClusterManager& cm,
+      std::shared_ptr<Envoy::Http::JwtAuth::JwtAuthStoreFactory>
+          jwt_store_factory);
   ~AuthenticationFilter();
 
   // Http::StreamFilterBase
@@ -53,8 +56,14 @@ class AuthenticationFilter : public StreamDecoderFilter,
   // The pointer to the http decoder call back.
   StreamDecoderFilterCallbacks* decoder_callbacks_;
 
+  // ClusterManager reference
+  Upstream::ClusterManager& cm_;
+
+  // The JWTAuthStoreFactory object
+  std::shared_ptr<Envoy::Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory_;
+
   // The JWT authenticator object.
-  JwtAuth::JwtAuthenticator jwt_auth_;
+  std::unique_ptr<JwtAuth::JwtAuthenticator> jwt_auth_;
 
   // The state of handling HTTP request
   enum State { Init, Calling, Responded, Complete };

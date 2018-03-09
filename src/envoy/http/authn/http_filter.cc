@@ -14,6 +14,7 @@
  */
 
 #include "src/envoy/http/authn/http_filter.h"
+#include <memory>
 #include "common/http/utility.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
 
@@ -22,14 +23,17 @@ namespace Http {
 
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
-    Upstream::ClusterManager& cm, JwtAuth::JwtAuthStore& store)
-    : config_(config), jwt_auth_(cm, store) {}
+    Upstream::ClusterManager& cm,
+    std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory)
+    : config_(config), cm_(cm), jwt_store_factory_(jwt_store_factory) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
 void AuthenticationFilter::onDestroy() {
   ENVOY_LOG(debug, "Called AuthenticationFilter : {}", __func__);
-  jwt_auth_.onDestroy();
+  if (jwt_auth_ != nullptr) {
+    jwt_auth_->onDestroy();
+  }
 }
 
 FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
@@ -93,6 +97,12 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
     const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
         config_.credential_rules()[0].origins()[0];
     if (m.has_jwt()) {
+      if (jwt_store_factory_ == nullptr) {
+        ENVOY_LOG(error,
+                  "AuthenticationFilter: {}: jwt_store_factory_ is nullptr!",
+                  __FUNCTION__);
+        return FilterHeadersStatus::Continue;
+      }
       const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
       ENVOY_LOG(debug,
                 "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
@@ -100,8 +110,11 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
       state_ = Calling;
       stopped_ = false;
 
+      jwt_auth_.reset(new Http::JwtAuth::JwtAuthenticator(
+          cm_, jwt_store_factory_->store()));
+
       // Verify the JWT token, onDone() will be called when completed.
-      jwt_auth_.Verify(headers, this);
+      jwt_auth_->Verify(headers, this);
 
       if (state_ == Complete) {
         return FilterHeadersStatus::Continue;
