@@ -23,9 +23,8 @@ namespace Http {
 
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
-    Upstream::ClusterManager& cm,
-    std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory)
-    : config_(config), cm_(cm), jwt_store_factory_(jwt_store_factory) {}
+    Upstream::ClusterManager& cm, JwtAuth::JwtAuthStore* jwt_store)
+    : config_(config), cm_(cm), jwt_store_(jwt_store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
 
@@ -93,35 +92,26 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
   }
   ENVOY_LOG(debug, "AuthenticationFilter: {} config.origins_size()={}",
             __func__, origins_size);
-  if (origins_size > 0) {
+  if (jwt_store_ != nullptr) {
     const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
         config_.credential_rules()[0].origins()[0];
-    if (m.has_jwt()) {
-      if (jwt_store_factory_ == nullptr) {
-        ENVOY_LOG(error,
-                  "AuthenticationFilter: {}: jwt_store_factory_ is nullptr!",
-                  __FUNCTION__);
-        return FilterHeadersStatus::Continue;
-      }
-      const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
-      ENVOY_LOG(debug,
-                "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
-                __func__, jwt.issuer(), jwt.jwks_uri());
-      state_ = Calling;
-      stopped_ = false;
+    const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
+    ENVOY_LOG(debug,
+              "AuthenticationFilter: {}: jwt.issuer()={}, jwt.jwks_uri()={}",
+              __func__, jwt.issuer(), jwt.jwks_uri());
+    state_ = Calling;
+    stopped_ = false;
 
-      jwt_auth_.reset(new Http::JwtAuth::JwtAuthenticator(
-          cm_, jwt_store_factory_->store()));
+    jwt_auth_.reset(new Http::JwtAuth::JwtAuthenticator(cm_, *jwt_store_));
 
-      // Verify the JWT token, onDone() will be called when completed.
-      jwt_auth_->Verify(headers, this);
+    // Verify the JWT token, onDone() will be called when completed.
+    jwt_auth_->Verify(headers, this);
 
-      if (state_ == Complete) {
-        return FilterHeadersStatus::Continue;
-      }
-      stopped_ = true;
-      return FilterHeadersStatus::StopIteration;
+    if (state_ == Complete) {
+      return FilterHeadersStatus::Continue;
     }
+    stopped_ = true;
+    return FilterHeadersStatus::StopIteration;
   }
   ENVOY_LOG(
       debug,

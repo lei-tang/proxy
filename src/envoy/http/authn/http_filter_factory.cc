@@ -113,8 +113,10 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
     return [&, jwt_store_factory](
                Http::FilterChainFactoryCallbacks& callbacks) -> void {
       callbacks.addStreamDecoderFilter(
-          std::make_shared<Http::AuthenticationFilter>(policy_, cm,
-                                                       jwt_store_factory));
+          std::make_shared<Http::AuthenticationFilter>(
+              policy_, cm, jwt_store_factory == nullptr
+                               ? nullptr
+                               : &jwt_store_factory->store()));
     };
   }
 

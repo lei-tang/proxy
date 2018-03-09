@@ -29,11 +29,9 @@ class AuthenticationFilter : public StreamDecoderFilter,
                              public JwtAuth::JwtAuthenticator::Callbacks,
                              public Logger::Loggable<Logger::Id::http> {
  public:
-  AuthenticationFilter(
-      const istio::authentication::v1alpha1::Policy& config,
-      Upstream::ClusterManager& cm,
-      std::shared_ptr<Envoy::Http::JwtAuth::JwtAuthStoreFactory>
-          jwt_store_factory);
+  AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config,
+                       Upstream::ClusterManager& cm,
+                       JwtAuth::JwtAuthStore* jwt_store);
   ~AuthenticationFilter();
 
   // Http::StreamFilterBase
@@ -59,8 +57,8 @@ class AuthenticationFilter : public StreamDecoderFilter,
   // ClusterManager reference
   Upstream::ClusterManager& cm_;
 
-  // The JWTAuthStoreFactory object
-  std::shared_ptr<Envoy::Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory_;
+  // The JwtAuthStore pointer
+  JwtAuth::JwtAuthStore* jwt_store_;
 
   // The JWT authenticator object.
   std::unique_ptr<JwtAuth::JwtAuthenticator> jwt_auth_;
