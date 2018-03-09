@@ -94,14 +94,11 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
       const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
           policy.credential_rules()[0].origins()[0];
       if (m.has_jwt()) {
-        // In POC, only the following fields are converted.
-        // Todo: may need to convert more fields if necessary
-        Http::JwtAuth::Config::JWT jwt;
-        jwt.set_issuer(m.jwt().issuer());
-        jwt.set_jwks_uri(m.jwt().jwks_uri());
-        jwt.set_jwks_uri_envoy_cluster(kJwtClusterName);
-        auto jwts = proto_config->add_jwts();
-        jwts->CopyFrom(jwt);
+        // Todo: when istio-authn::jwt diverges from jwt_auth::jwt,
+        // may need to convert more fields.
+        MessageUtil::jsonConvert(m.jwt(), *proto_config->add_jwts());
+        proto_config->mutable_jwts()->Mutable(0)->set_jwks_uri_envoy_cluster(
+            kJwtClusterName);
       }
     }
   }
