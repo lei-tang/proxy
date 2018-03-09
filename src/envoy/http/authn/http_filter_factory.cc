@@ -82,32 +82,27 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
  private:
   // Convert istio-authn::jwt to jwt_auth::jwt in protobuf format.
   void convertJwtAuthFormat(
-      istio::authentication::v1alpha1::Policy& policy,
+      const ::istio::authentication::v1alpha1::Jwt& jwt_authn,
       Http::JwtAuth::Config::AuthFilterConfig* proto_config) {
-    int origins_size = 0;
-    // In POC, only inspect the first credential_rule
-    if (policy.credential_rules_size() > 0 &&
-        policy.credential_rules()[0].origins_size() > 0) {
-      origins_size = policy.credential_rules()[0].origins_size();
-    }
-    if (origins_size > 0) {
-      const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
-          policy.credential_rules()[0].origins()[0];
-      if (m.has_jwt()) {
-        // Todo: when istio-authn::jwt diverges from jwt_auth::jwt,
-        // may need to convert more fields.
-        MessageUtil::jsonConvert(m.jwt(), *proto_config->add_jwts());
-        proto_config->mutable_jwts()->Mutable(0)->set_jwks_uri_envoy_cluster(
-            kJwtClusterName);
-      }
-    }
+    // Todo: when istio-authn::jwt diverges from jwt_auth::jwt,
+    // may need to convert more fields.
+    auto jwt = proto_config->add_jwts();
+    MessageUtil::jsonConvert(jwt_authn, *jwt);
+    jwt->set_jwks_uri_envoy_cluster(kJwtClusterName);
   }
 
   HttpFilterFactoryCb createFilter(FactoryContext& context) {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
     Http::JwtAuth::Config::AuthFilterConfig proto_config;
 
-    convertJwtAuthFormat(policy_, &proto_config);
+    // In POC, only inspect the first credential_rule
+    if (policy_.credential_rules_size() > 0 &&
+        policy_.credential_rules()[0].origins_size() > 0) {
+      auto m = policy_.credential_rules()[0].origins()[0];
+      if (m.has_jwt()) {
+        convertJwtAuthFormat(m.jwt(), &proto_config);
+      }
+    }
 
     std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory =
         std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
