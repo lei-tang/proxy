@@ -93,7 +93,6 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
 
   HttpFilterFactoryCb createFilter(FactoryContext& context) {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
-    Http::JwtAuth::Config::AuthFilterConfig proto_config;
     std::shared_ptr<Http::JwtAuth::JwtAuthStoreFactory> jwt_store_factory;
 
     // In POC, only inspect the first credential_rule
@@ -101,6 +100,7 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
         policy_.credential_rules()[0].origins_size() > 0) {
       auto m = policy_.credential_rules()[0].origins()[0];
       if (m.has_jwt()) {
+        Http::JwtAuth::Config::AuthFilterConfig proto_config;
         convertJwtAuthFormat(m.jwt(), &proto_config);
         jwt_store_factory =
             std::make_shared<Http::JwtAuth::JwtAuthStoreFactory>(proto_config,
