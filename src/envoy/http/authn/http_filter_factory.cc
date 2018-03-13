@@ -92,7 +92,9 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
 
   HttpFilterFactoryCb createFilter(FactoryContext& context) {
     ENVOY_LOG(debug, "Called AuthnFilterConfig : {}", __func__);
-    std::shared_ptr<Http::IstioAuthn::JwtAuthnStoreFactory> jwt_store_factory;
+    // std::shared_ptr<Http::IstioAuthn::JwtAuthnStoreFactory>
+    // jwt_store_factory;
+    std::shared_ptr<Http::IstioAuthn::JwtAuthnFactoryStore> jwt_factory_store;
 
     // In POC, only inspect the first credential_rule
     if (policy_.credential_rules_size() > 0 &&
@@ -101,36 +103,70 @@ class AuthnFilterConfig : public NamedHttpFilterConfigFactory,
       if (m.has_jwt()) {
         Http::JwtAuth::Config::AuthFilterConfig proto_config;
         convertJwtAuthFormat(m.jwt(), &proto_config);
-        jwt_store_factory =
-            std::make_shared<Http::IstioAuthn::JwtAuthnStoreFactory>(context);
+
+        jwt_factory_store =
+            std::make_shared<Http::IstioAuthn::JwtAuthnFactoryStore>(context);
         ENVOY_LOG(debug, "{}: add AuthFilterConfig to ORIGIN_STORE", __func__);
-        jwt_store_factory->store().addToStore(Http::IstioAuthn::ORIGIN_STORE,
-                                              proto_config);
-        if (jwt_store_factory->store().store().find(Http::IstioAuthn::ORIGIN_STORE) ==
-              jwt_store_factory->store().store().end()) {
-              ENVOY_LOG(debug, "AuthenticationFilter: {} no ORIGIN_STORE", __func__);
-        }
+        jwt_factory_store->addToStore(Http::IstioAuthn::ORIGIN_STORE,
+                                      proto_config);
         ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}", __FUNCTION__,
-                  static_cast<void *>(&jwt_store_factory->store()));
+                  static_cast<void*>(&jwt_factory_store->store()));
+        //        jwt_store_factory =
+        //            std::make_shared<Http::IstioAuthn::JwtAuthnStoreFactory>(context);
+        //        ENVOY_LOG(debug, "{}: add AuthFilterConfig to ORIGIN_STORE",
+        //        __func__);
+        //        jwt_store_factory->store().addToStore(Http::IstioAuthn::ORIGIN_STORE,
+        //                                              proto_config);
+        //        if
+        //        (jwt_store_factory->store().store().find(Http::IstioAuthn::ORIGIN_STORE)
+        //        ==
+        //              jwt_store_factory->store().store().end()) {
+        //              ENVOY_LOG(debug, "AuthenticationFilter: {} no
+        //              ORIGIN_STORE", __func__);
+        //        }
+        //        ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}",
+        //        __FUNCTION__,
+        //                  static_cast<void *>(&jwt_store_factory->store()));
       }
     }
 
     Upstream::ClusterManager& cm = context.clusterManager();
 
-    return [&, jwt_store_factory](
+    return [&, jwt_factory_store](
                Http::FilterChainFactoryCallbacks& callbacks) -> void {
-      //ENVOY_LOG(debug, "the address of jwt_store is {}", &jwt_store_factory->store());
-      ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}", __FUNCTION__, static_cast<void *>(&jwt_store_factory->store()));
-      if (jwt_store_factory->store().store().find(Http::IstioAuthn::ORIGIN_STORE) ==
-              jwt_store_factory->store().store().end()) {
-          ENVOY_LOG(debug, "AuthenticationFilter: {} no ORIGIN_STORE", __func__);
+
+      ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}", __FUNCTION__,
+                static_cast<void*>(&jwt_factory_store->store()));
+      if (jwt_factory_store->store().find(Http::IstioAuthn::ORIGIN_STORE) ==
+          jwt_factory_store->store().end()) {
+        ENVOY_LOG(debug, "AuthenticationFilter: {} no ORIGIN_STORE", __func__);
       }
 
-        callbacks.addStreamDecoderFilter(
+      callbacks.addStreamDecoderFilter(
           std::make_shared<Http::AuthenticationFilter>(
-              policy_, cm, jwt_store_factory == nullptr
-                               ? nullptr
-                               : &jwt_store_factory->store()));
+              policy_, cm, jwt_factory_store->store()));
+      //
+      //      callbacks.addStreamDecoderFilter(
+      //          std::make_shared<Http::AuthenticationFilter>(policy_, cm,
+      //          nullptr));
+
+      // ENVOY_LOG(debug, "the address of jwt_store is {}",
+      // &jwt_store_factory->store());
+      //      ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}",
+      //      __FUNCTION__, static_cast<void *>(&jwt_store_factory->store()));
+      //      if
+      //      (jwt_store_factory->store().store().find(Http::IstioAuthn::ORIGIN_STORE)
+      //      ==
+      //              jwt_store_factory->store().store().end()) {
+      //          ENVOY_LOG(debug, "AuthenticationFilter: {} no ORIGIN_STORE",
+      //          __func__);
+      //      }
+      //
+      //        callbacks.addStreamDecoderFilter(
+      //          std::make_shared<Http::AuthenticationFilter>(
+      //              policy_, cm, jwt_store_factory == nullptr
+      //                               ? nullptr
+      //                               : &jwt_store_factory->store()));
     };
   }
 

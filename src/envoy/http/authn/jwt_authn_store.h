@@ -27,6 +27,59 @@ namespace IstioAuthn {
 
 enum JwtStoreType { PEER_STORE = 0, ORIGIN_STORE = 1 };
 
+// Store the JwtAuthStoreFactory objects
+class JwtAuthnFactoryStore : public Logger::Loggable<Logger::Id::config> {
+ public:
+  JwtAuthnFactoryStore(Server::Configuration::FactoryContext &context)
+      : context_(context) {}
+
+  // Get per-thread auth store object.
+  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>>
+      &store() {
+    return store_;
+  }
+
+  // Add an AuthFilterConfig to the store
+  void addToStore(JwtStoreType type,
+                  Envoy::Http::JwtAuth::Config::AuthFilterConfig &config) {
+    std::string config_str;
+    config.SerializeToString(&config_str);
+    if (config_.find(type) != config_.end() &&
+        config_[type].find(config_str) != config_[type].end()) {
+      ENVOY_LOG(debug, "{}: AuthFilterConfig exists already", __FUNCTION__);
+      return;
+    }
+
+    if (config_.find(type) == config_.end()) {
+      // Add set of AuthFilterConfig as string for the given type
+      config_[type] = std::set<std::string>();
+    }
+    // Add the config_str to the set
+    config_[type].insert(config_str);
+
+    if (store_.find(type) == store_.end()) {
+      store_[type] = std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>();
+    }
+    // Add auth_store_factory to JwtAuthStoreFactory set
+    // store_[type].push_back(Envoy::Http::JwtAuth::JwtAuthStoreFactory(config,
+    // context_));
+    store_[type].emplace_back(config, context_);
+    ENVOY_LOG(debug, "{}: add a JwtAuthStoreFactory to the type {}",
+              __FUNCTION__, type);
+  }
+
+ private:
+  // Store the FactoryContext object reference
+  Server::Configuration::FactoryContext &context_;
+
+  // Store AuthFilterConfig as string
+  std::map<JwtStoreType, std::set<std::string>> config_{};
+
+  // Store the JwtAuthStoreFactory objects
+  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>>
+      store_{};
+};
+
 // Store the JwtAuthnStore objects as thread local
 class JwtAuthnStore : public ThreadLocal::ThreadLocalObject,
                       public Logger::Loggable<Logger::Id::config> {
