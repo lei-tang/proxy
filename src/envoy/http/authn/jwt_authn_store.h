@@ -27,19 +27,21 @@ namespace IstioAuthn {
 
 enum JwtStoreType { PEER_STORE = 0, ORIGIN_STORE = 1 };
 
+typedef std::map<JwtStoreType,
+                 std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>>
+    JwtMultiFactoryStore;
+
 // Store the JwtAuthStoreFactory objects
 class JwtAuthnFactoryStore : public Logger::Loggable<Logger::Id::config> {
  public:
   JwtAuthnFactoryStore(Server::Configuration::FactoryContext &context)
       : context_(context) {}
 
-  // Get per-thread auth store object.
-  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>>
-      &store() {
-    return store_;
-  }
+  // Get the reference of the JwtAuthStoreFactory objects
+  JwtMultiFactoryStore &store() { return store_; }
 
-  // Add an AuthFilterConfig to the store
+  // Add an AuthFilterConfig to the store.
+  // JwtStoreType type is an enum of PEER_STORE and ORIGIN_STORE.
   void addToStore(JwtStoreType type,
                   Envoy::Http::JwtAuth::Config::AuthFilterConfig &config) {
     std::string config_str;
@@ -49,22 +51,18 @@ class JwtAuthnFactoryStore : public Logger::Loggable<Logger::Id::config> {
       ENVOY_LOG(debug, "{}: AuthFilterConfig exists already", __FUNCTION__);
       return;
     }
-
     if (config_.find(type) == config_.end()) {
-      // Add set of AuthFilterConfig as string for the given type
+      // Add set of AuthFilterConfig as strings for the given type
       config_[type] = std::set<std::string>();
     }
-    // Add the config_str to the set
+    // Add config_str to the set
     config_[type].insert(config_str);
-
     if (store_.find(type) == store_.end()) {
       store_[type] = std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>();
     }
-    // Add auth_store_factory to JwtAuthStoreFactory set
-    // store_[type].push_back(Envoy::Http::JwtAuth::JwtAuthStoreFactory(config,
-    // context_));
+    // Add a JwtAuthStoreFactory
     store_[type].emplace_back(config, context_);
-    ENVOY_LOG(debug, "{}: add a JwtAuthStoreFactory to the type {}",
+    ENVOY_LOG(debug, "{}: added a JwtAuthStoreFactory to the type {}",
               __FUNCTION__, type);
   }
 
@@ -76,79 +74,7 @@ class JwtAuthnFactoryStore : public Logger::Loggable<Logger::Id::config> {
   std::map<JwtStoreType, std::set<std::string>> config_{};
 
   // Store the JwtAuthStoreFactory objects
-  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStoreFactory>>
-      store_{};
-};
-
-// Store the JwtAuthnStore objects as thread local
-class JwtAuthnStore : public ThreadLocal::ThreadLocalObject,
-                      public Logger::Loggable<Logger::Id::config> {
- public:
-  JwtAuthnStore() {}
-
-  // Get per-thread auth store object.
-  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStore>>
-      &store() {
-    return store_;
-  }
-
-  // Add an AuthFilterConfig to the store
-  void addToStore(JwtStoreType type,
-                  Envoy::Http::JwtAuth::Config::AuthFilterConfig &config) {
-    std::string config_str;
-    config.SerializeToString(&config_str);
-    if (config_.find(type) != config_.end() &&
-        config_[type].find(config_str) != config_[type].end()) {
-      ENVOY_LOG(debug, "{}: AuthFilterConfig exists already", __FUNCTION__);
-      return;
-    }
-
-    if (config_.find(type) == config_.end()) {
-      // Add set of AuthFilterConfig as string for the given type
-      config_[type] = std::set<std::string>();
-    }
-    // Add the config_str to the set
-    config_[type].insert(config_str);
-
-    Envoy::Http::JwtAuth::JwtAuthStore auth_store(config);
-    if (store_.find(type) == store_.end()) {
-      // Add set of JwtAuthStore for the given type
-      store_[type] = std::vector<Envoy::Http::JwtAuth::JwtAuthStore>();
-    }
-    // Add auth_store to JwtAuthStore set
-    store_[type].push_back(std::move(auth_store));
-    ENVOY_LOG(debug, "{}: add a JwtAuthStore to the type {}", __FUNCTION__,
-              type);
-  }
-
- private:
-  // Store AuthFilterConfig as string
-  std::map<JwtStoreType, std::set<std::string>> config_{};
-
-  // Store the JwtAuthStore objects
-  std::map<JwtStoreType, std::vector<Envoy::Http::JwtAuth::JwtAuthStore>>
-      store_{};
-};
-
-// The factory to create per-thread JwtAuthnStore object.
-class JwtAuthnStoreFactory : public Logger::Loggable<Logger::Id::config> {
- public:
-  // Create JwtAuthnStoreFactory
-  JwtAuthnStoreFactory(Server::Configuration::FactoryContext &context)
-      : tls_(context.threadLocal().allocateSlot()) {
-    ENVOY_LOG(info, "Creat JwtAuthnStoreFactory");
-    tls_->set(
-        [this](Event::Dispatcher &) -> ThreadLocal::ThreadLocalObjectSharedPtr {
-          return std::make_shared<JwtAuthnStore>();
-        });
-  }
-
-  // Get per-thread auth store object.
-  JwtAuthnStore &store() { return tls_->getTyped<JwtAuthnStore>(); }
-
- private:
-  // Thread local slot to store per-thread JwtAuthnStore object
-  ThreadLocal::SlotPtr tls_;
+  JwtMultiFactoryStore store_{};
 };
 
 }  // namespace IstioAuthn
