@@ -14,7 +14,7 @@
  */
 
 #include "src/envoy/http/authn/http_filter.h"
-#include <memory>
+//#include <memory>
 #include "common/http/utility.h"
 #include "src/envoy/http/authn/mtls_authentication.h"
 
@@ -23,7 +23,7 @@ namespace Http {
 
 AuthenticationFilter::AuthenticationFilter(
     const istio::authentication::v1alpha1::Policy& config,
-    Upstream::ClusterManager& cm, JwtAuth::JwtAuthStore* jwt_store)
+    Upstream::ClusterManager& cm, IstioAuthn::JwtAuthnStore* jwt_store)
     : config_(config), cm_(cm), jwt_store_(jwt_store) {}
 
 AuthenticationFilter::~AuthenticationFilter() {}
@@ -92,7 +92,31 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
   }
   ENVOY_LOG(debug, "AuthenticationFilter: {} config.origins_size()={}",
             __func__, origins_size);
-  if (jwt_store_ != nullptr) {
+
+  int num_config = 0;
+  if (jwt_store_ == nullptr) {
+    ENVOY_LOG(debug, "AuthenticationFilter: {} JwtAuthnStore is NULL.",
+              __func__);
+  } else if (jwt_store_->store().find(IstioAuthn::ORIGIN_STORE) ==
+             jwt_store_->store().end()) {
+    ENVOY_LOG(debug, "AuthenticationFilter: {} no ORIGIN_STORE", __func__);
+    ENVOY_LOG(debug, "{}: the address of jwt_store is {:p}", __FUNCTION__,
+              static_cast<void *>(jwt_store_));
+  } else if (jwt_store_->store()[IstioAuthn::ORIGIN_STORE].size() == 0) {
+    ENVOY_LOG(debug, "AuthenticationFilter: {} ORIGIN_STORE has size 0",
+              __func__);
+  }
+
+  if (jwt_store_ != nullptr &&
+      jwt_store_->store().find(IstioAuthn::ORIGIN_STORE) !=
+          jwt_store_->store().end() &&
+      jwt_store_->store()[IstioAuthn::ORIGIN_STORE].size() > 0) {
+    num_config = jwt_store_->store()[IstioAuthn::ORIGIN_STORE].size();
+  }
+  ENVOY_LOG(debug, "AuthenticationFilter: {} num_config is {}", __func__,
+            num_config);
+
+  if (num_config > 0) {
     const ::istio::authentication::v1alpha1::OriginAuthenticationMethod& m =
         config_.credential_rules()[0].origins()[0];
     const ::istio::authentication::v1alpha1::Jwt& jwt = m.jwt();
@@ -102,7 +126,9 @@ FilterHeadersStatus AuthenticationFilter::decodeHeaders(HeaderMap& headers,
     state_ = Calling;
     stopped_ = false;
 
-    jwt_auth_.reset(new Http::JwtAuth::JwtAuthenticator(cm_, *jwt_store_));
+    Http::JwtAuth::JwtAuthStore& jwt_auth_store =
+        jwt_store_->store()[IstioAuthn::ORIGIN_STORE][0];
+    jwt_auth_.reset(new Http::JwtAuth::JwtAuthenticator(cm_, jwt_auth_store));
 
     // Verify the JWT token, onDone() will be called when completed.
     jwt_auth_->Verify(headers, this);

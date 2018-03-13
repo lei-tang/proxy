@@ -19,6 +19,7 @@
 #include "authentication/v1alpha1/policy.pb.h"
 #include "common/common/logger.h"
 #include "server/config/network/http_connection_manager.h"
+#include "src/envoy/http/authn/jwt_authn_store.h"
 #include "src/envoy/http/jwt_auth/jwt_authenticator.h"
 
 namespace Envoy {
@@ -31,7 +32,7 @@ class AuthenticationFilter : public StreamDecoderFilter,
  public:
   AuthenticationFilter(const istio::authentication::v1alpha1::Policy& config,
                        Upstream::ClusterManager& cm,
-                       JwtAuth::JwtAuthStore* jwt_store);
+                       IstioAuthn::JwtAuthnStore* jwt_store);
   ~AuthenticationFilter();
 
   // Http::StreamFilterBase
@@ -57,8 +58,8 @@ class AuthenticationFilter : public StreamDecoderFilter,
   // ClusterManager reference
   Upstream::ClusterManager& cm_;
 
-  // The JwtAuthStore pointer
-  JwtAuth::JwtAuthStore* jwt_store_;
+  // The JwtAuthnStore reference
+  IstioAuthn::JwtAuthnStore* jwt_store_;
 
   // The JWT authenticator object.
   std::unique_ptr<JwtAuth::JwtAuthenticator> jwt_auth_;
