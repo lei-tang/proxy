@@ -51,6 +51,9 @@ class JwtVerificationFilter : public StreamDecoderFilter,
   // To be called when Jwt validation success to save payload for future use.
   void savePayload(const std::string& key, const std::string& payload) override;
 
+  // Save the processing result of the JWT filter to dynamic metadata.
+  void saveProcessingResult(const std::string& result);
+
   // The callback funcion.
   StreamDecoderFilterCallbacks* decoder_callbacks_;
   // The auth object.

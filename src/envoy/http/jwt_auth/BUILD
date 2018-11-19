@@ -69,8 +69,9 @@ envoy_cc_library(
     repository = "@envoy",
     deps = [
         ":jwt_authenticator_lib",
-        "@envoy//source/exe:envoy_common_lib",
         "//src/envoy/utils:filter_names_lib",
+        "//src/envoy/utils:utils_lib",
+        "@envoy//source/exe:envoy_common_lib",
     ],
 )
 
@@ -80,8 +81,8 @@ envoy_cc_library(
     repository = "@envoy",
     deps = [
         ":http_filter_lib",
-        "@envoy//source/exe:envoy_common_lib",
         "//src/envoy/utils:filter_names_lib",
+        "@envoy//source/exe:envoy_common_lib",
     ],
 )
 

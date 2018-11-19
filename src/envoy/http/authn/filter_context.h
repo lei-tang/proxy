@@ -72,6 +72,11 @@ class FilterContext : public Logger::Loggable<Logger::Id::filter> {
   // returns false.
   bool getJwtPayload(const std::string& issuer, std::string* payload) const;
 
+  // Get the JWT verification result from JWT filter. If non-empty
+  // result is found, return true and set the output result string. Otherwise,
+  // return false.
+  bool getJwtResult(std::string* result) const;
+
   const HeaderMap& headerMap() const { return header_map_; }
 
  private:

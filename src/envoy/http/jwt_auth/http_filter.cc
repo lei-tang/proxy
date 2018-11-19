@@ -19,6 +19,7 @@
 #include "common/http/utility.h"
 #include "envoy/http/async_client.h"
 #include "src/envoy/utils/filter_names.h"
+#include "src/envoy/utils/jwt_utils.h"
 
 #include <chrono>
 #include <string>
@@ -53,6 +54,9 @@ FilterHeadersStatus JwtVerificationFilter::decodeHeaders(HeaderMap& headers,
 void JwtVerificationFilter::onDone(const JwtAuth::Status& status) {
   ENVOY_LOG(debug, "JwtVerificationFilter::onDone with status {}",
             JwtAuth::StatusToString(status));
+
+  saveProcessingResult(JwtAuth::StatusToString(status));
+
   // This stream has been reset, abort the callback.
   if (state_ == Responded) {
     return;
@@ -77,6 +81,15 @@ void JwtVerificationFilter::savePayload(const std::string& key,
                                         const std::string& payload) {
   decoder_callbacks_->streamInfo().setDynamicMetadata(
       Utils::IstioFilterName::kJwt, MessageUtil::keyValueStruct(key, payload));
+}
+
+void JwtVerificationFilter::saveProcessingResult(const std::string& result) {
+  // With setDynamicMetadata, "A merge will be performed with new values for
+  // the same key overriding existing."
+  decoder_callbacks_->streamInfo().setDynamicMetadata(
+      Utils::IstioFilterName::kJwt,
+      MessageUtil::keyValueStruct(Utils::kJwtFilterProcessingResultKey,
+                                  result));
 }
 
 FilterDataStatus JwtVerificationFilter::decodeData(Buffer::Instance&, bool) {

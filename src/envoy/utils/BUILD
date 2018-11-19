@@ -32,12 +32,12 @@ envoy_cc_library(
     repository = "@envoy",
     visibility = ["//visibility:public"],
     deps = [
+        ":filter_names_lib",
         ":utils_lib",
         "//include/istio/utils:attribute_names_header",
         "//src/istio/authn:context_proto_cc",
         "//src/istio/utils:attribute_names_lib",
         "//src/istio/utils:utils_lib",
-        ":filter_names_lib",
         "@envoy//source/exe:envoy_common_lib",
     ],
 )
@@ -47,6 +47,7 @@ envoy_cc_library(
     srcs = [
         "config.cc",
         "grpc_transport.cc",
+        "jwt_utils.cc",
         "mixer_control.cc",
         "stats.cc",
         "utils.cc",
@@ -55,6 +56,7 @@ envoy_cc_library(
         "config.h",
         "grpc_transport.h",
         "header_update.h",
+        "jwt_utils.h",
         "mixer_control.h",
         "stats.h",
         "utils.h",

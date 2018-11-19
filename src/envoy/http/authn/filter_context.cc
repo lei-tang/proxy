@@ -15,6 +15,7 @@
 
 #include "src/envoy/http/authn/filter_context.h"
 #include "src/envoy/utils/filter_names.h"
+#include "src/envoy/utils/jwt_utils.h"
 #include "src/envoy/utils/utils.h"
 
 using istio::authn::Payload;
@@ -92,6 +93,29 @@ bool FilterContext::getJwtPayload(const std::string& issuer,
   }
 
   *payload = entry_it->second.string_value();
+  return true;
+}
+
+bool FilterContext::getJwtResult(std::string* result) const {
+  const auto filter_it =
+      dynamic_metadata_.filter_metadata().find(Utils::IstioFilterName::kJwt);
+  if (filter_it == dynamic_metadata_.filter_metadata().end()) {
+    ENVOY_LOG(debug, "No dynamic_metadata found for filter {}",
+              Utils::IstioFilterName::kJwt);
+    return false;
+  }
+
+  const auto& data_struct = filter_it->second;
+  const auto entry_it =
+      data_struct.fields().find(Envoy::Utils::kJwtFilterProcessingResultKey);
+  if (entry_it == data_struct.fields().end()) {
+    return false;
+  }
+  if (entry_it->second.string_value().empty()) {
+    return false;
+  }
+
+  *result = entry_it->second.string_value();
   return true;
 }
 
