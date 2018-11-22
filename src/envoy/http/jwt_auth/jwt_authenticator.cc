@@ -195,6 +195,28 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
     return;
   }
 
+  // Check whether there are distributed claims in the payload
+  // The claim key for the distributed claims (OIDC Connect Core 1.0, section 5.6.2).
+  // For example,
+  //  "_claim_names": {
+  //    "groups": "group_source_1"
+  //  },
+  //  "_claim_sources": {
+  //    "group_source_1": {
+  //      "endpoint": "https://127.0.0.1:63725/groups",
+  //      "access_token": "group_access_token"
+  //    }
+  //  },
+  // The OIDC server at github.com/lei-tang/dev/tests/go/group-demo-2/oidc_server
+  // uses the following public key:
+  // {"keys":[{"kty":"RSA","kid":"d96cf58fcd9c6a2dba65f71df8b8a65cd9e3be8127695184fe6269b89fcc43d0","alg":"RS256","n":"0pXWMYjWRjBEds_fKj_u9r2E6SIDx0J-TAg-eyVeR20Ky9jZmIXW5zSxE_EKpNQpiBWm1e6G9kmhMuqjr7g455S7E-3rD3OVkdTT6SU5AKBNSFoRXUd-G_YJEtRzrpEYNtEJHkxUxWuyfCHblHSt-wsrE6t0DccCqC87lKQiGb_QfC8uP6ZS99SCjKBEFp1fZvyNkYwStFc2OH5fBGPXXb6SNsquvDeKX9NeWjXkmxDkbOg2kSkel4s_zw5KwcW3JzERfEcLStrDQ8fRbJ1C3uC088sUk4q4APQmKI_8FTvJe431Vne9sOSptphiqCjlR-Knja58rc_vt4TkSPZf2w","e":"AQAB"}]}
+  std::string claimNamesKey = "_claim_names";
+  if (jwt_->Payload()->hasObject(claimNamesKey)) {
+    ENVOY_LOG(debug, "The JWT contains a distributed claim.");
+  } else {
+    ENVOY_LOG(debug, "The JWT does not contain a distributed claim.");
+  }
+
   // TODO: can we save as proto or json object directly?
   // User the issuer as the entry key for simplicity. The forward_payload_header
   // field can be removed or replace by a boolean (to make `save` is
