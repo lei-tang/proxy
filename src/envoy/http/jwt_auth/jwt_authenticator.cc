@@ -196,8 +196,8 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
   }
 
   // Check whether there are distributed claims in the payload
-  // The claim key for the distributed claims (OIDC Connect Core 1.0, section 5.6.2).
-  // For example,
+  // The claim key for the distributed claims (OIDC Connect Core 1.0,
+  // section 5.6.2). For example,
   //  "_claim_names": {
   //    "groups": "group_source_1"
   //  },
@@ -207,14 +207,25 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
   //      "access_token": "group_access_token"
   //    }
   //  },
-  // The OIDC server at github.com/lei-tang/dev/tests/go/group-demo-2/oidc_server
-  // uses the following public key:
-  // {"keys":[{"kty":"RSA","kid":"d96cf58fcd9c6a2dba65f71df8b8a65cd9e3be8127695184fe6269b89fcc43d0","alg":"RS256","n":"0pXWMYjWRjBEds_fKj_u9r2E6SIDx0J-TAg-eyVeR20Ky9jZmIXW5zSxE_EKpNQpiBWm1e6G9kmhMuqjr7g455S7E-3rD3OVkdTT6SU5AKBNSFoRXUd-G_YJEtRzrpEYNtEJHkxUxWuyfCHblHSt-wsrE6t0DccCqC87lKQiGb_QfC8uP6ZS99SCjKBEFp1fZvyNkYwStFc2OH5fBGPXXb6SNsquvDeKX9NeWjXkmxDkbOg2kSkel4s_zw5KwcW3JzERfEcLStrDQ8fRbJ1C3uC088sUk4q4APQmKI_8FTvJe431Vne9sOSptphiqCjlR-Knja58rc_vt4TkSPZf2w","e":"AQAB"}]}
-  std::string claimNamesKey = "_claim_names";
-  if (jwt_->Payload()->hasObject(claimNamesKey)) {
-    ENVOY_LOG(debug, "The JWT contains a distributed claim.");
+  std::string dist_claim_key;
+  std::string dist_claim_val;
+  std::string dist_claim_endpoint;
+  std::string dist_claim_access_token;
+  bool ret = ExtractDistributedClaimKeyValue(dist_claim_key, dist_claim_val);
+  // Fetch the distributed claim endpoint and the access token.
+  if (ret && !dist_claim_key.empty() && !dist_claim_val.empty()) {
+    ENVOY_LOG(debug, "JWT contain a distributed claim ({}), with value ({})",
+              dist_claim_key, dist_claim_val);
+    ret = ExtractDistributedClaimEndpoint(dist_claim_val, dist_claim_endpoint,
+                                          dist_claim_access_token);
+    if (ret && !dist_claim_endpoint.empty() &&
+        !dist_claim_access_token.empty()) {
+      ENVOY_LOG(debug,
+                "Distributed claim endpoint ({}), with access token ({})",
+                dist_claim_endpoint, dist_claim_access_token);
+    }
   } else {
-    ENVOY_LOG(debug, "The JWT does not contain a distributed claim.");
+    ENVOY_LOG(debug, "No distributed claim extracted.");
   }
 
   // TODO: can we save as proto or json object directly?
@@ -256,6 +267,134 @@ void JwtAuthenticator::DoneWithStatus(const Status& status) {
 
 const LowerCaseString& JwtAuthenticator::JwtPayloadKey() {
   return kJwtPayloadKey;
+}
+
+bool JwtAuthenticator::ExtractDistributedClaimKeyValue(std::string& key,
+                                                       std::string& val) {
+  // The claim key for the distributed claims (OIDC Connect Core 1.0,
+  // section 5.6.2).
+  std::string claim_names_key = "_claim_names";
+  Envoy::Json::ObjectSharedPtr claim_obj;
+  try {
+    if (!jwt_->Payload()->hasObject(claim_names_key)) {
+      ENVOY_LOG(debug, "The JWT does not contain a distributed claim.");
+      return false;
+    }
+    claim_obj = jwt_->Payload()->getObject(claim_names_key);
+    if (!claim_obj) {
+      return false;
+    }
+  } catch (Json::Exception& e) {
+    ENVOY_LOG(debug, "{}: unable to get the claim object", __FUNCTION__);
+    return false;
+  }
+
+  ENVOY_LOG(debug, "{}: distributed claim object is {}", __FUNCTION__,
+            claim_obj->asJsonString());
+  std::map<std::string, std::string> claims;
+  // Extract claims as strings
+  claim_obj->iterate([claim_obj, &claims](const std::string& key,
+                                          const Json::Object&) -> bool {
+    // In current implementation, only string claims are extracted
+    try {
+      // Try as string, will throw execption if object type is not string.
+      std::string claim_val = claim_obj->getString(key);
+      ENVOY_LOG(debug, "Distributed claim {} is extracted", key);
+      claims[key] = claim_val;
+    } catch (Json::Exception& e) {
+      // Not convertable to string
+      ENVOY_LOG(debug, "{}: distributed claim {} is NOT string", __FUNCTION__,
+                key);
+    }
+    return true;
+  });
+  // Only process one distributed claim
+  if (!claims.empty()) {
+    key = claims.begin()->first;
+    val = claims.begin()->second;
+    return true;
+  }
+  return false;
+}
+
+bool JwtAuthenticator::ExtractDistributedClaimEndpoint(
+    const std::string& source, std::string& endpoint, std::string& token) {
+  // The claim key for the distributed claims (OIDC Connect Core 1.0,
+  // section 5.6.2).
+
+  //  "_claim_names": {
+  //    "groups": "group_source_1"
+  //  },
+  //  "_claim_sources": {
+  //    "group_source_1": {
+  //      "endpoint": "https://127.0.0.1:63725/groups",
+  //      "access_token": "group_access_token"
+  //    }
+  //  },
+  std::string claim_key = "_claim_sources";
+  std::string endpoint_key = "endpoint";
+  std::string access_token_key = "access_token";
+
+  Envoy::Json::ObjectSharedPtr claim_obj;
+  try {
+    if (!jwt_->Payload()->hasObject(claim_key)) {
+      ENVOY_LOG(debug, "The JWT does not contain a distributed claim source.");
+      return false;
+    }
+    claim_obj = jwt_->Payload()->getObject(claim_key);
+    if (!claim_obj) {
+      return false;
+    }
+  } catch (Json::Exception& e) {
+    ENVOY_LOG(debug, "{}: unable to get the claim source object", __FUNCTION__);
+    return false;
+  }
+
+  ENVOY_LOG(debug, "{}: distributed claim source object is {}", __FUNCTION__,
+            claim_obj->asJsonString());
+
+  Envoy::Json::ObjectSharedPtr source_obj;
+  try {
+    if (!claim_obj->hasObject(source)) {
+      ENVOY_LOG(
+          debug,
+          "The source object does not contain the distributed claim source {}.",
+          source);
+      return false;
+    }
+    source_obj = claim_obj->getObject(source);
+    if (!source_obj) {
+      return false;
+    }
+  } catch (Json::Exception& e) {
+    ENVOY_LOG(debug, "{}: unable to get the claim source object", __FUNCTION__);
+    return false;
+  }
+
+  std::map<std::string, std::string> claims;
+  // Extract claims in the distributed source as strings
+  source_obj->iterate([source_obj, &claims](const std::string& key,
+                                            const Json::Object&) -> bool {
+    // In current implementation, only string claims are extracted
+    try {
+      // Try as string, will throw execption if object type is not string.
+      std::string claim_val = source_obj->getString(key);
+      ENVOY_LOG(debug, "Distributed source claim {} is extracted", key);
+      claims[key] = claim_val;
+    } catch (Json::Exception& e) {
+      // Not convertable to string
+      ENVOY_LOG(debug, "{}: distributed source claim {} is NOT string",
+                __FUNCTION__, key);
+    }
+    return true;
+  });
+  if (!claims.empty() && claims.count(endpoint_key) > 0 &&
+      claims.count(access_token_key) > 0) {
+    endpoint = claims[endpoint_key];
+    token = claims[access_token_key];
+    return true;
+  }
+  return false;
 }
 
 }  // namespace JwtAuth

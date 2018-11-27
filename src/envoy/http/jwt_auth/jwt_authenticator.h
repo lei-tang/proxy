@@ -66,6 +66,17 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
   // Return true if it is OK to forward this request without JWT.
   bool OkToBypass();
 
+  // Extract the key and the value of the distributed claim.
+  // Return true if a distributed claim is extracted.
+  bool ExtractDistributedClaimKeyValue(std::string& key, std::string& val);
+
+  // Extract the endpoint and the access token of the distributed claim.
+  // Return true if the endpoint and access token of the distributed claim is
+  // extracted.
+  bool ExtractDistributedClaimEndpoint(const std::string& source,
+                                       std::string& endpoint,
+                                       std::string& token);
+
   // The cluster manager object to make HTTP call.
   Upstream::ClusterManager& cm_;
   // The cache object.
