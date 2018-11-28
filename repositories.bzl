@@ -99,7 +99,7 @@ cc_library(
             actual = "@googletest_git//:googletest_prod",
         )
 
-ISTIO_API = "6b9e3a501e6ef254958bf82f7b74c37d64a57a15"
+ISTIO_API = "c2c3874454758ccf57ac5375af7668da534c86aa"
 ISTIO_API_SHA256 = "ce43fcc51bd7c653d39b810e50df68e32ed95991919c1d1f2f56b331d79e674e"
 
 def mixerapi_repositories(bind=True):
@@ -204,7 +204,7 @@ filegroup(
         build_file_content = BUILD,
         strip_prefix = "api-" + ISTIO_API,
         url = "https://github.com/istio/api/archive/" + ISTIO_API + ".tar.gz",
-        sha256 = ISTIO_API_SHA256,
+      #  sha256 = ISTIO_API_SHA256,
     )
     if bind:
         native.bind(

@@ -77,6 +77,8 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
                                        std::string& endpoint,
                                        std::string& token);
 
+  void GetDistributedClaim(const std::string endpoint, const std::string token);
+
   // The cluster manager object to make HTTP call.
   Upstream::ClusterManager& cm_;
   // The cache object.

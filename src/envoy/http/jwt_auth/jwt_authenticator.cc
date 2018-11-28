@@ -223,6 +223,7 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
       ENVOY_LOG(debug,
                 "Distributed claim endpoint ({}), with access token ({})",
                 dist_claim_endpoint, dist_claim_access_token);
+      GetDistributedClaim(dist_claim_endpoint, dist_claim_access_token);
     }
   } else {
     ENVOY_LOG(debug, "No distributed claim extracted.");
@@ -257,6 +258,7 @@ void JwtAuthenticator::DoneWithStatus(const Status& status) {
   ENVOY_LOG(debug,
             "The value of allow_missing_or_failed in AuthFilterConfig is: {}",
             store_.config().allow_missing_or_failed());
+
   if (store_.config().allow_missing_or_failed()) {
     callback_->onDone(JwtAuth::Status::OK);
   } else {
@@ -321,16 +323,6 @@ bool JwtAuthenticator::ExtractDistributedClaimEndpoint(
     const std::string& source, std::string& endpoint, std::string& token) {
   // The claim key for the distributed claims (OIDC Connect Core 1.0,
   // section 5.6.2).
-
-  //  "_claim_names": {
-  //    "groups": "group_source_1"
-  //  },
-  //  "_claim_sources": {
-  //    "group_source_1": {
-  //      "endpoint": "https://127.0.0.1:63725/groups",
-  //      "access_token": "group_access_token"
-  //    }
-  //  },
   std::string claim_key = "_claim_sources";
   std::string endpoint_key = "endpoint";
   std::string access_token_key = "access_token";
@@ -395,6 +387,26 @@ bool JwtAuthenticator::ExtractDistributedClaimEndpoint(
     return true;
   }
   return false;
+}
+
+void JwtAuthenticator::GetDistributedClaim(const std::string endpoint,
+                                           const std::string token) {
+  ENVOY_LOG(debug, "Get the distributed claim from ({}), token ({})", endpoint,
+            token);
+  std::string cluster;
+  for (const auto u : store_.config().dist_uri_whitelist()) {
+    ENVOY_LOG(debug, "Whitelisted URI: uri ({}), cluster ({})", u.uri(),
+              u.cluster());
+    if (endpoint == u.uri()) {
+      cluster = u.cluster();
+      ENVOY_LOG(debug, "The endpoint ({}) has the cluster ({})", endpoint,
+                cluster);
+      break;
+    }
+  }
+  if (cluster.empty()) {
+    return;
+  }
 }
 
 }  // namespace JwtAuth
