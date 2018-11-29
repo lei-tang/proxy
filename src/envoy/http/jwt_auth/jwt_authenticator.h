@@ -42,14 +42,26 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
   void Verify(HeaderMap& headers, Callbacks* callback);
 
   // The callback for fetching a distributed claim.
-  class DistributedClaimCallback : public AsyncClient::Callbacks {
+  class DistributedClaimCallback : public AsyncClient::Callbacks, Callbacks {
    public:
     DistributedClaimCallback(JwtAuthenticator& authenticator);
-    void onSuccess(MessagePtr&& response) override;
-    void onFailure(AsyncClient::FailureReason) override;
+    ~DistributedClaimCallback();
 
    private:
+    void onSuccess(MessagePtr&& response) override;
+    void onFailure(AsyncClient::FailureReason) override;
+    // the function for JwtAuth::Authenticator::Callbacks interface.
+    // To be called when its Verify() call is completed.
+    void onDone(const JwtAuth::Status& status) override;
+
+    // the function for JwtAuth::Authenticator::Callbacks interface.
+    // To be called when Jwt validation success to save payload for future use.
+    void savePayload(const std::string& key,
+                     const std::string& payload) override;
     JwtAuthenticator& jwt_authn_;
+    // The JWT authenticator for distributed claim
+    std::unique_ptr<JwtAuthenticator> distributed_jwt_authn_;
+    Http::HeaderMapPtr headers_;
   };
 
   // Called when the object is about to be destroyed.

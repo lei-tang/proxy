@@ -401,6 +401,8 @@ JwtAuthenticator::DistributedClaimCallback::DistributedClaimCallback(
     Envoy::Http::JwtAuth::JwtAuthenticator& authenticator)
     : jwt_authn_(authenticator) {}
 
+JwtAuthenticator::DistributedClaimCallback::~DistributedClaimCallback() {}
+
 void JwtAuthenticator::DistributedClaimCallback::onSuccess(
     Envoy::Http::MessagePtr&& response) {
   jwt_authn_.distributed_claim_request_ = nullptr;
@@ -418,6 +420,13 @@ void JwtAuthenticator::DistributedClaimCallback::onSuccess(
                 jwt_authn_.distributed_claim_uri_);
     }
     ENVOY_LOG(debug, "Distributed claim body is {}", body);
+
+    headers_ = std::make_unique<Http::HeaderMapImpl>();
+    headers_->addCopy(Envoy::Http::LowerCaseString("authorization"),
+                      "Bearer " + body);
+    distributed_jwt_authn_.reset(
+        new JwtAuthenticator(jwt_authn_.cm_, jwt_authn_.store_));
+    distributed_jwt_authn_.get()->Verify(*headers_.get(), this);
     // OnFetchPubkeyDone(body);
     jwt_authn_.DoneWithStatus(Status::OK);
   } else {
@@ -436,6 +445,43 @@ void JwtAuthenticator::DistributedClaimCallback::onFailure(
             jwt_authn_.distributed_claim_uri_);
   jwt_authn_.DoneWithStatus(Status::FAILED_FETCH_DISTRIBUTED_CLAIM);
   // DoneWithStatus(Status::FAILED_FETCH_PUBKEY);
+}
+
+void JwtAuthenticator::DistributedClaimCallback::onDone(
+    const JwtAuth::Status& status) {
+  ENVOY_LOG(debug,
+            "JwtAuthenticator::DistributedClaimCallback::onDone with status {}",
+            JwtAuth::StatusToString(status));
+  // This stream has been reset, abort the callback.
+  //  if (state_ == Responded) {
+  //    return;
+  //  }
+  //  if (status != JwtAuth::Status::OK) {
+  //    state_ = Responded;
+  //    // verification failed
+  //    Code code = Code(401);  // Unauthorized
+  //    // return failure reason as message body
+  //    decoder_callbacks_->sendLocalReply(code,
+  //    JwtAuth::StatusToString(status),
+  //                                       nullptr, absl::nullopt);
+  //    return;
+  //  }
+  //
+  //  state_ = Complete;
+  //  if (stopped_) {
+  //    decoder_callbacks_->continueDecoding();
+  //  }
+}
+
+void JwtAuthenticator::DistributedClaimCallback::savePayload(
+    const std::string& key, const std::string& payload) {
+  ENVOY_LOG(debug,
+            "JwtAuthenticator::DistributedClaimCallback::savePayload, key is "
+            "{}, payload is {}",
+            key, payload);
+  //  decoder_callbacks_->streamInfo().setDynamicMetadata(
+  //      Utils::IstioFilterName::kJwt, MessageUtil::keyValueStruct(key,
+  //      payload));
 }
 
 // Fetch distributed claim from the remote endpoint
