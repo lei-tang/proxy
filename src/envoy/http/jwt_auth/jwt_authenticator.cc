@@ -58,6 +58,8 @@ void JwtAuthenticator::Verify(HeaderMap& headers,
                               JwtAuthenticator::Callbacks* callback) {
   headers_ = &headers;
   callback_ = callback;
+  distributed_claim_key_ = "";
+  distributed_claim_payload_ = "";
 
   ENVOY_LOG(debug, "Jwt authentication starts");
   std::vector<std::unique_ptr<JwtTokenExtractor::Token>> tokens;
@@ -222,6 +224,7 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
   if (ret && !dist_claim_key.empty() && !dist_claim_val.empty()) {
     ENVOY_LOG(debug, "JWT contain a distributed claim ({}), with value ({})",
               dist_claim_key, dist_claim_val);
+    distributed_claim_key_ = dist_claim_key;
     ret = ExtractDistributedClaimEndpoint(dist_claim_val, dist_claim_endpoint,
                                           dist_claim_access_token);
     if (ret && !dist_claim_endpoint.empty() &&
@@ -428,7 +431,7 @@ void JwtAuthenticator::DistributedClaimCallback::onSuccess(
         new JwtAuthenticator(jwt_authn_.cm_, jwt_authn_.store_));
     distributed_jwt_authn_.get()->Verify(*headers_.get(), this);
     // OnFetchPubkeyDone(body);
-    jwt_authn_.DoneWithStatus(Status::OK);
+    // jwt_authn_.DoneWithStatus(Status::OK);
   } else {
     ENVOY_LOG(debug,
               "fetch distributed claim [uri = {}]: response status code {}",
@@ -452,25 +455,36 @@ void JwtAuthenticator::DistributedClaimCallback::onDone(
   ENVOY_LOG(debug,
             "JwtAuthenticator::DistributedClaimCallback::onDone with status {}",
             JwtAuth::StatusToString(status));
-  // This stream has been reset, abort the callback.
-  //  if (state_ == Responded) {
-  //    return;
-  //  }
-  //  if (status != JwtAuth::Status::OK) {
-  //    state_ = Responded;
-  //    // verification failed
-  //    Code code = Code(401);  // Unauthorized
-  //    // return failure reason as message body
-  //    decoder_callbacks_->sendLocalReply(code,
-  //    JwtAuth::StatusToString(status),
-  //                                       nullptr, absl::nullopt);
-  //    return;
-  //  }
-  //
-  //  state_ = Complete;
-  //  if (stopped_) {
-  //    decoder_callbacks_->continueDecoding();
-  //  }
+
+  if (status == Status::OK && !jwt_authn_.distributed_claim_payload_.empty()) {
+    // Merge the resolved distributed claims with the original claims
+    //    ENVOY_LOG(debug, "The original payload is: {}",
+    //              jwt_authn_.jwt_.get()->Payload().get()->asJsonString());
+    ENVOY_LOG(debug, "The original payload is: {}",
+              jwt_authn_.jwt_.get()->PayloadStr());
+    ENVOY_LOG(debug, "The resolved distributed JWT payload is: {}",
+              jwt_authn_.distributed_claim_payload_);
+    Envoy::Json::ObjectSharedPtr json_obj;
+    try {
+      json_obj =
+          Json::Factory::loadFromString(jwt_authn_.jwt_.get()->PayloadStr());
+      ENVOY_LOG(debug, "{}: json object is {}", __FUNCTION__,
+                json_obj->asJsonString());
+    } catch (...) {
+      jwt_authn_.DoneWithStatus(Status::JWT_PAYLOAD_PARSE_ERROR);
+      return;
+    }
+    // TO-DO: remove distributed claims in JWT and merge the resolved claims
+    // json_obj->
+    //    jwt_authn_.callback_->savePayload(issuer_item.jwt_config().issuer(),
+    //                                      jwt_->PayloadStr());
+    //    if (!issuer_item.jwt_config().forward()) {
+    //      // Remove JWT from headers.
+    //      token_->Remove(headers_);
+    //    }
+  }
+
+  jwt_authn_.DoneWithStatus(status);
 }
 
 void JwtAuthenticator::DistributedClaimCallback::savePayload(
@@ -479,6 +493,7 @@ void JwtAuthenticator::DistributedClaimCallback::savePayload(
             "JwtAuthenticator::DistributedClaimCallback::savePayload, key is "
             "{}, payload is {}",
             key, payload);
+  jwt_authn_.distributed_claim_payload_ = payload;
   //  decoder_callbacks_->streamInfo().setDynamicMetadata(
   //      Utils::IstioFilterName::kJwt, MessageUtil::keyValueStruct(key,
   //      payload));

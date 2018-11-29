@@ -58,6 +58,7 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
     // To be called when Jwt validation success to save payload for future use.
     void savePayload(const std::string& key,
                      const std::string& payload) override;
+    // The JWT authenticator for the original JWT
     JwtAuthenticator& jwt_authn_;
     // The JWT authenticator for distributed claim
     std::unique_ptr<JwtAuthenticator> distributed_jwt_authn_;
@@ -130,6 +131,10 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
   std::string distributed_claim_uri_;
   // The pending distributed claim request so it can be canceled.
   AsyncClient::Request* distributed_claim_request_{};
+  // The name of the distributed claim
+  std::string distributed_claim_key_;
+  // The resolved distributed claim payload
+  std::string distributed_claim_payload_;
 };
 
 }  // namespace JwtAuth
