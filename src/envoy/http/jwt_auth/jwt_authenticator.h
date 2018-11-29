@@ -41,6 +41,17 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
   };
   void Verify(HeaderMap& headers, Callbacks* callback);
 
+  // The callback for fetching a distributed claim.
+  class DistributedClaimCallback : public AsyncClient::Callbacks {
+   public:
+    DistributedClaimCallback(JwtAuthenticator& authenticator);
+    void onSuccess(MessagePtr&& response) override;
+    void onFailure(AsyncClient::FailureReason) override;
+
+   private:
+    JwtAuthenticator& jwt_authn_;
+  };
+
   // Called when the object is about to be destroyed.
   void onDestroy();
 
@@ -77,7 +88,8 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
                                        std::string& endpoint,
                                        std::string& token);
 
-  void GetDistributedClaim(const std::string endpoint, const std::string token);
+  void FetchDistributedClaim(const std::string endpoint,
+                             const std::string token);
 
   // The cluster manager object to make HTTP call.
   Upstream::ClusterManager& cm_;
@@ -97,6 +109,15 @@ class JwtAuthenticator : public Logger::Loggable<Logger::Id::filter>,
   std::string uri_;
   // The pending remote request so it can be canceled.
   AsyncClient::Request* request_{};
+
+  friend class DistributedClaimCallback;
+  // The distributed claim callback object.
+  std::unique_ptr<DistributedClaimCallback> distributed_claim_callback_;
+
+  // The pending distributed_claim_uri_, only used for logging.
+  std::string distributed_claim_uri_;
+  // The pending distributed claim request so it can be canceled.
+  AsyncClient::Request* distributed_claim_request_{};
 };
 
 }  // namespace JwtAuth

@@ -174,6 +174,12 @@ void JwtAuthenticator::onDestroy() {
     request_ = nullptr;
     ENVOY_LOG(debug, "fetch pubkey [uri = {}]: canceled", uri_);
   }
+  if (distributed_claim_request_) {
+    distributed_claim_request_->cancel();
+    distributed_claim_request_ = nullptr;
+    ENVOY_LOG(debug, "fetch distributed claim [uri = {}]: canceled",
+              distributed_claim_uri_);
+  }
 }
 
 // Handle the public key fetch done event.
@@ -223,7 +229,9 @@ void JwtAuthenticator::VerifyKey(const PubkeyCacheItem& issuer_item) {
       ENVOY_LOG(debug,
                 "Distributed claim endpoint ({}), with access token ({})",
                 dist_claim_endpoint, dist_claim_access_token);
-      GetDistributedClaim(dist_claim_endpoint, dist_claim_access_token);
+      FetchDistributedClaim(dist_claim_endpoint, dist_claim_access_token);
+      // Wait the fetching to complete.
+      return;
     }
   } else {
     ENVOY_LOG(debug, "No distributed claim extracted.");
@@ -389,8 +397,50 @@ bool JwtAuthenticator::ExtractDistributedClaimEndpoint(
   return false;
 }
 
-void JwtAuthenticator::GetDistributedClaim(const std::string endpoint,
-                                           const std::string token) {
+JwtAuthenticator::DistributedClaimCallback::DistributedClaimCallback(
+    Envoy::Http::JwtAuth::JwtAuthenticator& authenticator)
+    : jwt_authn_(authenticator) {}
+
+void JwtAuthenticator::DistributedClaimCallback::onSuccess(
+    Envoy::Http::MessagePtr&& response) {
+  jwt_authn_.distributed_claim_request_ = nullptr;
+  uint64_t status_code = Http::Utility::getResponseStatus(response->headers());
+  if (status_code == 200) {
+    ENVOY_LOG(debug, "fetch distributed claim [uri = {}]: success",
+              jwt_authn_.distributed_claim_uri_);
+    std::string body;
+    if (response->body()) {
+      auto len = response->body()->length();
+      body = std::string(static_cast<char*>(response->body()->linearize(len)),
+                         len);
+    } else {
+      ENVOY_LOG(debug, "Distributed claim [uri = {}]: body is empty",
+                jwt_authn_.distributed_claim_uri_);
+    }
+    ENVOY_LOG(debug, "Distributed claim body is {}", body);
+    // OnFetchPubkeyDone(body);
+    jwt_authn_.DoneWithStatus(Status::OK);
+  } else {
+    ENVOY_LOG(debug,
+              "fetch distributed claim [uri = {}]: response status code {}",
+              jwt_authn_.distributed_claim_uri_, status_code);
+    jwt_authn_.DoneWithStatus(Status::FAILED_FETCH_DISTRIBUTED_CLAIM);
+    //    DoneWithStatus(Status::FAILED_FETCH_PUBKEY);
+  }
+}
+
+void JwtAuthenticator::DistributedClaimCallback::onFailure(
+    Envoy::Http::AsyncClient::FailureReason) {
+  jwt_authn_.distributed_claim_request_ = nullptr;
+  ENVOY_LOG(debug, "fetch distributed claim [uri = {}]: failed",
+            jwt_authn_.distributed_claim_uri_);
+  jwt_authn_.DoneWithStatus(Status::FAILED_FETCH_DISTRIBUTED_CLAIM);
+  // DoneWithStatus(Status::FAILED_FETCH_PUBKEY);
+}
+
+// Fetch distributed claim from the remote endpoint
+void JwtAuthenticator::FetchDistributedClaim(const std::string endpoint,
+                                             const std::string token) {
   ENVOY_LOG(debug, "Get the distributed claim from ({}), token ({})", endpoint,
             token);
   std::string cluster;
@@ -407,6 +457,29 @@ void JwtAuthenticator::GetDistributedClaim(const std::string endpoint,
   if (cluster.empty()) {
     return;
   }
+
+  distributed_claim_uri_ = endpoint;
+  std::string host, path;
+  ExtractUriHostPath(distributed_claim_uri_, &host, &path);
+
+  MessagePtr message(new RequestMessageImpl());
+  message->headers().insertMethod().value().setReference(
+      Http::Headers::get().MethodValues.Get);
+  message->headers().insertPath().value(path);
+  message->headers().insertHost().value(host);
+
+  if (cm_.get(cluster) == nullptr) {
+    DoneWithStatus(Status::FAILED_FETCH_DISTRIBUTED_CLAIM);
+    return;
+  }
+
+  ENVOY_LOG(debug, "fetch a distributed claim from [uri = {}]: start",
+            distributed_claim_uri_);
+  distributed_claim_callback_.reset(
+      new JwtAuthenticator::DistributedClaimCallback(*this));
+  distributed_claim_request_ = cm_.httpAsyncClientForCluster(cluster).send(
+      std::move(message), *distributed_claim_callback_.get(),
+      absl::optional<std::chrono::milliseconds>());
 }
 
 }  // namespace JwtAuth

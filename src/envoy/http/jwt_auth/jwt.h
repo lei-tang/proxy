@@ -105,6 +105,9 @@ enum class Status {
 
   // Failed to fetch public key
   FAILED_FETCH_PUBKEY = 25,
+
+  // Failed to fetch a distributed claim
+  FAILED_FETCH_DISTRIBUTED_CLAIM = 26,
 };
 
 std::string StatusToString(Status status);
