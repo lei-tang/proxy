@@ -475,6 +475,12 @@ void JwtAuthenticator::DistributedClaimCallback::onDone(
       return;
     }
     // TO-DO: remove distributed claims in JWT and merge the resolved claims
+    // Need to remove keys from Json object. If unable to find such
+    // Json class, may use ProtobufWkt.
+    // An alternative way to remove distributed claims is to iterate all claims,
+    // copy the non-distributed claims into a new json object, copy the
+    // resolved claims to the new json object, return the new json object
+    // as the resolved JWT payload.
     // json_obj->
     //    jwt_authn_.callback_->savePayload(issuer_item.jwt_config().issuer(),
     //                                      jwt_->PayloadStr());
