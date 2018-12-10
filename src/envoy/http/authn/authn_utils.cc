@@ -27,6 +27,12 @@ namespace AuthN {
 namespace {
 // The JWT audience key name
 static const std::string kJwtAudienceKey = "aud";
+// The JWT issuer key name
+static const std::string kJwtIssuerKey = "iss";
+// The APToken issuer
+static const std::string kAPTokenIssuer = "https://cloud.google.com/iap";
+// The key name for the APToken original claims
+static const std::string kAPTokenOriginalPayload = "original_payload";
 
 // Extract JWT claim as a string list.
 // This function only extracts string and string list claims.
@@ -98,6 +104,43 @@ bool AuthnUtils::ProcessJwtPayload(const std::string& payload_str,
   }
 
   return true;
+}
+
+bool AuthnUtils::ExtractOriginalPayload(const std::string& token,
+                                        std::string* original_payload) {
+  Envoy::Json::ObjectSharedPtr json_obj;
+  try {
+    json_obj = Json::Factory::loadFromString(token);
+  } catch (...) {
+    return false;
+  }
+
+  Envoy::Json::ObjectSharedPtr original_payload_obj;
+  try {
+    auto original_payload_obj = json_obj->getObject(kAPTokenOriginalPayload);
+    *original_payload = original_payload_obj->asJsonString();
+    ENVOY_LOG(debug, "{}: original_payload in APToken is {}", __FUNCTION__,
+              *original_payload);
+  } catch (...) {
+    ENVOY_LOG(debug, "{}: original_payload in APToken is of invalid format.",
+              __FUNCTION__);
+    return false;
+  }
+
+  return true;
+}
+
+bool AuthnUtils::IsAPToken(const std::string& payload_str) {
+  Envoy::Json::ObjectSharedPtr json_obj;
+  try {
+    json_obj = Json::Factory::loadFromString(payload_str);
+  } catch (...) {
+    return false;
+  }
+  if (json_obj->getString(kJwtIssuerKey, "") != kAPTokenIssuer) {
+    return false;
+  }
+  return json_obj->hasObject(kAPTokenOriginalPayload);
 }
 
 bool AuthnUtils::MatchString(const char* const str,
