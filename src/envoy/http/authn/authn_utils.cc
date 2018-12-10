@@ -29,8 +29,6 @@ namespace {
 static const std::string kJwtAudienceKey = "aud";
 // The JWT issuer key name
 static const std::string kJwtIssuerKey = "iss";
-// The APToken issuer
-static const std::string kAPTokenIssuer = "https://cloud.google.com/iap";
 // The key name for the APToken original claims
 static const std::string kAPTokenOriginalPayload = "original_payload";
 
