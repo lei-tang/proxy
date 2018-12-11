@@ -137,10 +137,22 @@ bool AuthnUtils::IsAPToken(const std::string& payload_str) {
   } catch (...) {
     return false;
   }
-  if (json_obj->getString(kJwtIssuerKey, "") != kAPTokenIssuer) {
+  if (json_obj->hasObject(kAPTokenOriginalPayload) == false) {
     return false;
   }
-  return json_obj->hasObject(kAPTokenOriginalPayload);
+
+  Envoy::Json::ObjectSharedPtr original_payload_obj;
+  try {
+    original_payload_obj = json_obj->getObject(kAPTokenOriginalPayload);
+  } catch (...) {
+    return false;
+  }
+
+  std::string iss1 = json_obj->getString(kJwtIssuerKey, "");
+  std::string iss2 = original_payload_obj->getString(kJwtIssuerKey, "");
+  // Token exchange makes the issuers of the APToken and the original JWT
+  // to be different.
+  return (!iss1.empty() && !iss2.empty() && iss1 != iss2);
 }
 
 bool AuthnUtils::MatchString(const char* const str,
