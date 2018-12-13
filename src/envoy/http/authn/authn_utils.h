@@ -44,10 +44,6 @@ class AuthnUtils : public Logger::Loggable<Logger::Id::filter> {
   static bool ExtractOriginalPayload(const std::string& token,
                                      std::string* original_payload);
 
-  // Return true if the JWT is an APToken.
-  // Otherwise, return false.
-  static bool IsAPToken(const std::string& jwt_payload_str);
-
   // Returns true if str is matched to match.
   static bool MatchString(const char* const str,
                           const iaapi::StringMatch& match);

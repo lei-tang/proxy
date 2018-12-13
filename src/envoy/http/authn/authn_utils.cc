@@ -115,9 +115,21 @@ bool AuthnUtils::ExtractOriginalPayload(const std::string& token,
     return false;
   }
 
+  if (json_obj->hasObject(kAPTokenOriginalPayload) == false) {
+    return false;
+  }
+
   Envoy::Json::ObjectSharedPtr original_payload_obj;
   try {
     auto original_payload_obj = json_obj->getObject(kAPTokenOriginalPayload);
+    std::string iss1 = json_obj->getString(kJwtIssuerKey, "");
+    std::string iss2 = original_payload_obj->getString(kJwtIssuerKey, "");
+    // Token exchange makes the issuers of the APToken and the original JWT
+    // to be different.
+    if (!(!iss1.empty() && !iss2.empty() && iss1 != iss2)) {
+      return false;
+    }
+
     *original_payload = original_payload_obj->asJsonString();
     ENVOY_LOG(debug, "{}: original_payload in APToken is {}", __FUNCTION__,
               *original_payload);
@@ -128,31 +140,6 @@ bool AuthnUtils::ExtractOriginalPayload(const std::string& token,
   }
 
   return true;
-}
-
-bool AuthnUtils::IsAPToken(const std::string& payload_str) {
-  Envoy::Json::ObjectSharedPtr json_obj;
-  try {
-    json_obj = Json::Factory::loadFromString(payload_str);
-  } catch (...) {
-    return false;
-  }
-  if (json_obj->hasObject(kAPTokenOriginalPayload) == false) {
-    return false;
-  }
-
-  Envoy::Json::ObjectSharedPtr original_payload_obj;
-  try {
-    original_payload_obj = json_obj->getObject(kAPTokenOriginalPayload);
-  } catch (...) {
-    return false;
-  }
-
-  std::string iss1 = json_obj->getString(kJwtIssuerKey, "");
-  std::string iss2 = original_payload_obj->getString(kJwtIssuerKey, "");
-  // Token exchange makes the issuers of the APToken and the original JWT
-  // to be different.
-  return (!iss1.empty() && !iss2.empty() && iss1 != iss2);
 }
 
 bool AuthnUtils::MatchString(const char* const str,

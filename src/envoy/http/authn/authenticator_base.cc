@@ -70,8 +70,7 @@ bool AuthenticatorBase::validateJwt(const iaapi::Jwt& jwt, Payload* payload) {
   if (filter_context()->getJwtPayload(jwt.issuer(), &jwt_payload)) {
     std::string payload_to_process = jwt_payload;
     std::string original_payload;
-    if (AuthnUtils::IsAPToken(jwt_payload) &&
-        AuthnUtils::ExtractOriginalPayload(jwt_payload, &original_payload)) {
+    if (AuthnUtils::ExtractOriginalPayload(jwt_payload, &original_payload)) {
       payload_to_process = original_payload;
     }
     return AuthnUtils::ProcessJwtPayload(payload_to_process,
